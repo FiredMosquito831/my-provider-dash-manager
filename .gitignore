@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.smoke-data/
+spike-report.json
+smoke-report.json
+*.local
+.remember/
