@@ -312,6 +312,9 @@ class ViewManager {
       .sort((a, b) => a[1].lastActivated - b[1].lastActivated);
   }
 
+  // Evict least-recently-used tabs down to warmLimit. Each live dashboard costs ~350–375 MB of RAM,
+  // so this is the difference between a 600 MB footprint (5 tabs) and unbounded growth that would
+  // exhaust memory on machines with many accounts. Sled tabs stay in the strip and resume on click.
   enforceWarmLimit() {
     const limit = Math.max(1, Number(store.settings.warmLimit) || 5);
     const warm = this.warmTabsSorted();
