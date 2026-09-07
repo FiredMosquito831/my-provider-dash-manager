@@ -54,8 +54,12 @@ jobs:
       # The npm package is the installer CLI (npx my-provider-dash-manager). It must move with the
       # release, or `npx` keeps pointing at an older installer than the GitHub release offers.
       # Needs an NPM_TOKEN repository secret of type "Automation" (classic tokens fail 2FA with EOTP).
+      # continue-on-error: the GitHub release has already published by this point, so a failure here
+      # must not fail the whole release. It reports loudly instead, and the next step makes the
+      # mismatch impossible to miss.
       - name: Publish to npm
-        if: ${{ env.NPM_TOKEN != '' }}
+        id: npmpublish
+        continue-on-error: true
         shell: bash
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -67,9 +71,17 @@ jobs:
             npm publish --access public
           fi
 
-      - name: Note when npm publishing was skipped
-        if: ${{ env.NPM_TOKEN == '' }}
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: echo "::warning::NPM_TOKEN secret is not set — the npm package was NOT updated for this release. Add an Automation token at Settings → Secrets → Actions."
+      # Always report whether npm actually matches the tag, whatever happened above.
+      - name: Verify npm matches the release
+        shell: bash
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          got=$(npm view my-provider-dash-manager version 2>/dev/null || echo "none")
+          if [ "$got" = "$want" ]; then
+            echo "npm is at $got — matches the release"
+          else
+            echo "::warning::npm is at $got but this release is $want. The npm package was NOT updated."
+            echo "::warning::Publishing needs an **Automation** npm token in the NPM_TOKEN secret — classic and login-session tokens fail with EOTP because the account enforces 2FA for writes."
+            echo "::warning::Until then, publish manually: npm publish --access public"
+          fi
       # Installer is unsigned (SmartScreen warns); code signing is tracked in the working notes.
