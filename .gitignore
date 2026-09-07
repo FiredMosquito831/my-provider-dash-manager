@@ -5,3 +5,4 @@ spike-report.json
 smoke-report.json
 *.local
 .remember/
+ui-screenshot.png
