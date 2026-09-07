@@ -2,6 +2,18 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.2.6 — 2026-09-07
+
+### Fixed
+- **Memory readout was roughly 1.7× too high.** It summed each process's working set, which counts
+  Chromium's shared pages once per process — 1,388 MB reported where Windows showed 803 MB private for
+  the same instant. It now reports private memory, matching Task Manager, with the working-set total
+  in the tooltip.
+
+### Changed
+- The repository is public under a source-available licence (free personal and commercial use, no
+  modification or derivative distribution, attribution required). Updates therefore need no token.
+
 ## 0.2.5 — 2026-09-07
 
 ### Changed
