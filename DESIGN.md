@@ -13,7 +13,7 @@ service, one tab per account, instant switching, and sessions that persist acros
 | Account creation | Guided **manual** signup inside each account's own isolated session — never automated (Vercel/Netlify AUP prohibit automated multi-account creation; Cloudflare detects bulk signup) |
 | Service set growth | Phase 1: curated built-in list done well → Phase 2: fully generic (any URL) → Phase 3: plugin manifest ecosystem |
 | Sync | Single machine first, encrypted local store; multi-device sync documented as a future option |
-| Curated services | v1: Vercel, Netlify, Supabase, Cloudflare, Railway, Render, GitHub. 0.4.0 added Fly.io, Heroku, DigitalOcean, Neon, GitLab, npm, PyPI, Docker Hub, Hugging Face, Stripe (17 total) |
+| Curated services | v1: Vercel, Netlify, Supabase, Cloudflare, Railway, Render, GitHub. 0.4.0 added Fly.io, Heroku, DigitalOcean, Neon, GitLab, npm, PyPI, Docker Hub, Hugging Face, Stripe. 0.5.0 added Google (7 consoles), Microsoft (4), mail (6), AWS, OpenAI, Anthropic — 37 total, grouped by category |
 | ToS stance | Warn on risky services (banner): Railway/GitHub are one-account-per-person by ToS; Vercel/Netlify/Supabase/Cloudflare watch multi-accounting |
 
 ## Architecture
@@ -70,7 +70,7 @@ Per-service facts that shaped the design:
 | `src/ui.html` / `src/ui.js` | The chrome: left account rail, tabs-only top strip, Home grid, modals, Updates panel. Plain DOM, no framework |
 | `src/preload.js` | contextBridge surface for the chrome renderer |
 | `src/account-preload.js` | Isolated-world helper inside every account view: login capture, fill on request, login-form detection. Exposes nothing to the page |
-| `src/services.js` | The 17 curated built-in services: URLs, colour, multi-account policy, optional extra auth hosts trusted by the credential guard, token hint |
+| `src/services.js` | The 37 curated built-in services: URLs, colour, category, multi-account policy, optional extra auth hosts trusted by the credential guard, token hint |
 | `src/providers.js` | Read-only API status fetchers per built-in service |
 | `src/api-tokens.js` | DPAPI-encrypted token store (`safeStorage`), validated before storing |
 | `src/credentials.js` | Saved logins: encrypted store, Chromium/CSV import, per-account + per-origin recall |

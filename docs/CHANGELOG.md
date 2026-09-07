@@ -2,6 +2,29 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.5.0 — 2026-09-07
+
+### Added
+- **Google, Microsoft, mail, AWS and AI services** — 20 new built-ins, 37 in total: Google Account,
+  Gmail, Google Cloud, Firebase, Google Workspace Admin, Google Play Console, Google AI Studio;
+  Microsoft Account, Outlook, Azure, Microsoft 365 Admin; Proton Mail, Zoho Mail, Fastmail, Yahoo
+  Mail, Tuta Mail, iCloud Mail; AWS; OpenAI Platform and Claude Platform (Anthropic).
+- **Google sign-in works inside the app.** Verified against Google's own sign-in flow: with the
+  app's default browser identity Google serves its sign-in and looks the account up. (Do not expect
+  "Continue with Google" on third-party sites to work — Google blocks that in embedded browsers.)
+- **Add-account picker.** The rail and Home now show only services you have accounts on; every other
+  service is one click away in a searchable, category-grouped picker. A fresh install shows the
+  picker on Home instead of 37 empty rows.
+
+### Changed
+- Sign-in detection understands services that authenticate on a separate host (accounts.google.com,
+  login.live.com, id.heroku.com…).
+- The ad-blocker leaves sign-in infrastructure alone (Google's session-check iframe, Microsoft and
+  Apple login CDNs); those hosts get no password trust.
+- Services' sign-in domains are declared explicitly where they differ from the dashboard (Microsoft,
+  Apple, Zoho EU, AWS regional sign-in, OpenAI's auth host, Anthropic's old console domain).
+- The Anthropic entry follows the console's move to platform.claude.com.
+
 ## 0.4.1 — 2026-09-07
 
 ### Changed

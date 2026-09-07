@@ -58,8 +58,12 @@ function userData(name) { return userDataPath(name); }
 // Built-in curated services + user-added generic ones (Phase 2) + plugin manifests (Phase 3).
 let pluginServices = [];
 let pluginErrors = [];
+// Sign-in infrastructure the managed services depend on but that is not a credential host: the
+// ad-blocker must leave these alone (EasyList rules hit e.g. accounts.youtube.com/CheckConnection,
+// which Google sign-in loads in an iframe). This list grants NO password trust — see serviceHosts.
+const AUTH_INFRA_HOSTS = ['accounts.youtube.com', 'accounts.google.com', 'gstatic.com', 'login.microsoftonline.com', 'login.live.com', 'msftauth.net', 'msauth.net', 'appleid.cdn-apple.com'];
 function refreshManagedHosts() {
-  const hosts = new Set();
+  const hosts = new Set(AUTH_INFRA_HOSTS);
   for (const s of allServices()) for (const h of serviceHosts(s.key)) hosts.add(h);
   content.setManagedHosts([...hosts]);
 }
@@ -266,8 +270,12 @@ class ViewManager {
     });
     const onNav = (_e, url2) => {
       tab.url = url2;
-      // conservative sign-in heuristic: sitting on the service's login page means not signed in
-      tab.lastState = url2.startsWith(service.loginUrl) ? 'signin' : 'ok';
+      // conservative sign-in heuristic: sitting on the service's login page means not signed in.
+      // When the service authenticates on a separate host (accounts.google.com, login.live.com,
+      // id.heroku.com…) any URL on that host counts as "signing in".
+      const loginHost = creds.hostOf(service.loginUrl);
+      const onAuthHost = loginHost && loginHost !== creds.hostOf(service.dashboardUrl) && creds.hostOf(url2) === loginHost;
+      tab.lastState = (url2.startsWith(service.loginUrl) || onAuthHost) ? 'signin' : 'ok';
       const a = findAccount(svc, id);
       if (a) { a.lastState = tab.lastState; store.save(); }
       this.emitState();
@@ -609,8 +617,9 @@ async function runSmokeServices() {
   const check = (name, ok, detail = '') => { results.checks.push({ name, ok, detail }); console.log(`[smoke:services] ${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`); };
   const keys = SERVICES.map(s => s.key);
   check('unique-keys', new Set(keys).size === keys.length, `${keys.length} services`);
-  check('definitions-complete', SERVICES.every(s => s.name && /^https:\/\//.test(s.dashboardUrl) && /^https:\/\//.test(s.loginUrl) && /^https:\/\//.test(s.signupUrl) && /^#[0-9a-f]{6}$/i.test(s.color) && ['ok', 'warn', 'one-per-person'].includes(s.multiAccountPolicy)));
+  check('definitions-complete', SERVICES.every(s => s.name && /^https:\/\//.test(s.dashboardUrl) && /^https:\/\//.test(s.loginUrl) && /^https:\/\//.test(s.signupUrl) && /^#[0-9a-f]{6}$/i.test(s.color) && ['ok', 'warn', 'one-per-person'].includes(s.multiAccountPolicy) && typeof s.category === 'string' && s.category));
   check('partition-ids-safe', SERVICES.every(s => /^[a-z0-9_-]+$/.test(s.key)), keys.join(','));
+  check('extra-hosts-are-specific', SERVICES.every(s => (s.extraHosts || []).every(h => /^[a-z0-9.-]+\.[a-z]+$/.test(h) && h.split('.').length >= 3)));
   check('extra-hosts-in-guard', serviceHosts('dockerhub').includes('login.docker.com') && originAllowed('dockerhub', 'https://login.docker.com/u/login?x=1') && !originAllowed('dockerhub', 'https://evil.example/'));
 
   const win = new BaseWindow({ width: 1280, height: 800, show: false });

@@ -101,6 +101,14 @@
     .act:hover { background:#0007; color:var(--text); }
     .act svg { width:13px; height:13px; }
     .emptyhint { color:var(--muted); font-size:11px; margin:2px 0 6px 22px; }
+    .picker .pickgroup { margin:6px 0 10px; }
+    .picker .picklabel { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin:0 0 4px; }
+    .chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .chip { display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 10px; border:1px solid var(--border); border-radius:14px;
+            background:var(--panel2); color:var(--text); font-size:12px; cursor:pointer; transition:background .18s, border-color .18s; }
+    .chip:hover { background:var(--panel3); border-color:var(--accent); }
+    .chip .dot { width:8px; height:8px; border-radius:50%; flex:none; }
+    .pickscroll { max-height:60vh; overflow-y:auto; margin-top:8px; }
     #railfoot { flex:none; padding:var(--s2); border-top:1px solid var(--border); display:flex; gap:6px; }
     #railfoot .ctlbtn { flex:1; justify-content:center; font-size:12px; }
 

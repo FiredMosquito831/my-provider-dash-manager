@@ -1,10 +1,9 @@
 # My Provider Dash Manager
 
-**One desktop app for every cloud account you own.** Keep several Vercel, Netlify, Cloudflare,
-Railway, Render, Fly.io, Heroku, DigitalOcean, Supabase, Neon, GitHub, GitLab, npm, PyPI, Docker Hub,
-Hugging Face and Stripe accounts signed in at the same time, each in a fully isolated session, and
-switch between them instantly — the way a browser handles tabs, but built around *accounts* instead
-of pages.
+**One desktop app for every account you own.** Keep several Google, Microsoft, AWS, Vercel,
+Netlify, Cloudflare, Supabase, GitHub, npm, Stripe, Gmail, Outlook, Proton Mail (and 25 more) accounts
+signed in at the same time, each in a fully isolated session, and switch between them instantly — the
+way a browser handles tabs, but built around *accounts* instead of pages.
 
 <sub>Windows desktop app · Electron 43 · local-first · no telemetry, no account, no server ·
 source-available licence: free for personal and commercial use</sub>
@@ -141,11 +140,26 @@ sessions, one place.
   account's login, and a saved password is never filled into a page outside the service's domains.
 
 ### Built-in services
-Seventeen services ship ready to use, grouped in the rail: **hosting** (Vercel, Netlify, Cloudflare,
-Railway, Render, Fly.io, Heroku, DigitalOcean), **data** (Supabase, Neon), **code and packages**
-(GitHub, GitLab, npm, PyPI, Docker Hub, Hugging Face) and **payments** (Stripe). Every login page is
-verified to load inside an isolated partition by `npm run smoke:services`. Anything else can be added
-by URL or as a plugin (below).
+Thirty-seven services ship ready to use, grouped by category. The rail and Home show only the ones
+you have accounts on; everything else sits one click away behind **Add account**, a searchable picker.
+
+| Category | Services |
+|---|---|
+| Hosting & deploy | Vercel, Netlify, Cloudflare, Railway, Render, Fly.io, Heroku, DigitalOcean |
+| Databases | Supabase, Neon |
+| Code & packages | GitHub, GitLab, npm, PyPI, Docker Hub, Hugging Face |
+| Payments | Stripe |
+| Google | Google Account, Gmail, Google Cloud, Firebase, Google Workspace Admin, Google Play Console, Google AI Studio |
+| Microsoft | Microsoft Account, Outlook, Azure, Microsoft 365 Admin |
+| Mail | Proton Mail, Zoho Mail, Fastmail, Yahoo Mail, Tuta Mail, iCloud Mail |
+| Cloud | AWS |
+| AI | OpenAI Platform, Claude Platform (Anthropic) |
+
+Every login page is verified to load inside an isolated partition, landing on a host the credential
+guard trusts, by `npm run smoke:services`. Google sign-in works directly in the app (verified against
+Google's own sign-in flow); "Continue with Google" buttons on *other* sites remain blocked by Google
+in embedded browsers, so use email/password or GitHub there. Anything else can be added by URL or as
+a plugin (below).
 
 ### API status
 Paste a read-only API token into an account and its Home card shows live status — project, app,

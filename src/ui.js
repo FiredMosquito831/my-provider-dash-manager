@@ -52,6 +52,16 @@ function svcOf(key) { return services.find(s => s.key === key) || { key, name: k
 function isCollapsed(svc) { return (state.collapsed || []).includes(svc); }
 function isStripCollapsed(svc) { return (state.stripCollapsed || []).includes(svc); }
 
+// Rail/Home grouping for built-in services (services.js `category`); custom + plugin services fall into 'other'.
+const CATEGORIES = [
+  ['hosting', 'Hosting & deploy'], ['data', 'Databases'], ['code', 'Code & packages'], ['payments', 'Payments'],
+  ['google', 'Google'], ['microsoft', 'Microsoft'], ['mail', 'Mail'], ['cloud', 'Cloud'], ['ai', 'AI'], ['other', 'Other'],
+];
+function categoryOf(s) { return CATEGORIES.some(([k]) => k === s.category) ? s.category : 'other'; }
+function categoryLabel(k) { const c = CATEGORIES.find(([key]) => key === k); return c ? c[1] : 'Other'; }
+// A service earns a rail row / Home group once it has an account (or the user added it by hand).
+function hasPresence(s) { return s.custom || registry.some(a => a.svc === s.key); }
+
 const POLICY_TEXT = {
   ok: '',
   warn: 'multi-accounting is watched here — use judgment',
@@ -137,7 +147,7 @@ function renderRail() {
   $railTop.innerHTML = `<button id="homebtn" class="${state.activeKey === null ? 'active' : ''}"
     title="Home — all accounts (Esc)">${icon('home')}<span>Home</span></button>`;
 
-  $railScroll.innerHTML = services.map(s => {
+  $railScroll.innerHTML = services.filter(hasPresence).map(s => {
     const accs = registry.filter(a => a.svc === s.key);
     const collapsed = isCollapsed(s.key);
     const openCount = state.tabs.filter(t => t.svc === s.key).length;
@@ -153,8 +163,11 @@ function renderRail() {
       ${collapsed ? '' : (accs.length ? accs.map(a => acctRow(a)).join('')
         : `<div class="emptyhint">No accounts yet</div>`)}
     </div>`;
-  }).join('') + `<button class="ctlbtn" id="add-service" style="width:100%;justify-content:center;margin-top:8px"
-      title="Add any web service by URL">${icon('plus')} Add service</button>`;
+  }).join('') + `${services.some(hasPresence) ? '' : '<div class="emptyhint" style="margin:8px 6px">No accounts yet — pick a service below.</div>'}
+    <button class="ctlbtn" id="add-account" style="width:100%;justify-content:center;margin-top:8px"
+      title="Add an account on any of the ${services.length} built-in services">${icon('plus')} Add account</button>
+    <button class="ctlbtn" id="add-service" style="width:100%;justify-content:center;margin-top:6px"
+      title="Add any web service by URL">${icon('plus')} Add service by URL</button>`;
 
   $railFoot.innerHTML = `
     <button class="ctlbtn" id="rail-refresh" title="Re-fetch API status for connected accounts">${icon('refresh')} Status</button>
@@ -198,6 +211,7 @@ $railFoot.addEventListener('click', async e => {
 
 $railScroll.addEventListener('click', async e => {
   if (e.target.closest('#add-service')) { openAddServiceModal(); return; }
+  if (e.target.closest('#add-account')) { openPickerModal(); return; }
   const rm = e.target.closest('[data-rmsvc]');
   if (rm) {
     e.stopPropagation();
@@ -260,7 +274,7 @@ function renderHome() {
       <button class="ctlbtn ${st.forceDark ? 'on' : ''}" id="t-forceDark" title="Force dark on sites with no dark theme (Dark Reader-style inversion)">${icon('contrast')} Force dark</button>
       <span>· click a card to open its dashboard — sessions persist per account</span>
     </div>
-    ${services.map(svc => {
+    ${services.filter(hasPresence).map(svc => {
       const accs = registry.filter(a => a.svc === svc.key);
       return `<div class="svcgroup">
         <div class="head">
@@ -274,6 +288,7 @@ function renderHome() {
         </div>
       </div>`;
     }).join('')}
+    ${pickerHtml('data-add2')}
     ${updatePanel()}
     <div class="svcgroup">
       <div class="head"><span class="name">Saved logins</span>
@@ -287,6 +302,39 @@ function renderHome() {
       </div>
     </div>`;
   restoreHomeFocus(keepValue); // re-renders no longer kick you out of the warm-limit field
+}
+
+// Chips for every service that has no presence yet, grouped by category. `attr` is the data attribute
+// the click handler listens for. `all` lists every service (the modal picker), `q` filters by name.
+function pickerHtml(attr, all = false, q = '') {
+  const needle = q.trim().toLowerCase();
+  const pool = services.filter(s => (all || !hasPresence(s)) && (!needle || s.name.toLowerCase().includes(needle) || s.key.includes(needle)));
+  if (!pool.length) return all ? '<div class="emptyhint">No service matches.</div>' : '';
+  const groups = CATEGORIES.map(([k, label]) => [label, pool.filter(s => categoryOf(s) === k)]).filter(([, list]) => list.length);
+  return `<div class="svcgroup picker">
+    ${all ? '' : `<div class="head"><span class="name">Add an account</span><span class="policy">${pool.length} services built in — or add any site by URL</span></div>`}
+    ${groups.map(([label, list]) => `<div class="pickgroup"><div class="picklabel">${esc(label)}</div><div class="chips">
+      ${list.map(s => `<button class="chip" ${attr}="${esc(s.key)}" title="Add a ${esc(s.name)} account"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}</button>`).join('')}
+    </div></div>`).join('')}
+  </div>`;
+}
+
+function openPickerModal() {
+  const render = q => {
+    $modal.innerHTML = `
+      <h3>Add account</h3>
+      <input type="text" id="pick-q" placeholder="Search ${services.length} services…" value="${esc(q)}" />
+      <div class="pickscroll">${pickerHtml('data-pick', true, q)}</div>
+      <div class="row"><button class="btn-plain" id="m-cancel">Cancel</button></div>`;
+    const input = $modal.querySelector('#pick-q');
+    input.oninput = () => { const v = input.value; const at = input.selectionStart; render(v); const i2 = $modal.querySelector('#pick-q'); i2.focus(); i2.setSelectionRange(at, at); };
+    $modal.querySelector('#m-cancel').onclick = closeModal;
+    $modal.querySelectorAll('[data-pick]').forEach(b => { b.onclick = () => openAddModal(b.getAttribute('data-pick')); });
+  };
+  render('');
+  $modalBack.hidden = false;
+  window.api.setModalOpen(true);
+  $modal.querySelector('#pick-q').focus();
 }
 
 function fmtBytes(n) {
@@ -445,7 +493,9 @@ function openAddModal(svc) {
     <div id="m-error" style="color:var(--danger);font-size:11px;margin-top:8px"></div>
     <div class="note">${policy
       ? `${esc(policy)}. Signup is manual inside this account's own isolated session — never automated.`
-      : 'The session opens inside this account’s own isolated browser storage. Avoid Google login (blocked in embedded browsers) — use email/password or GitHub.'}</div>
+      : (service.category === 'google'
+        ? 'The session opens inside this account’s own isolated browser storage. Google sign-in works here directly; if Google ever refuses the browser, use “Open in system browser”.'
+        : 'The session opens inside this account’s own isolated browser storage. “Continue with Google” on third-party sites is blocked in embedded browsers — use email/password or GitHub there.')}</div>
     <div class="row"><button class="btn-plain" id="m-cancel">Cancel</button></div>`;
   $modalBack.hidden = false;
   window.api.setModalOpen(true);
