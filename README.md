@@ -9,6 +9,47 @@ session, and switch between them instantly — the way a browser handles tabs, b
 
 ---
 
+## Install
+
+Download the latest installer from
+[Releases](https://github.com/FiredMosquito831/my-provider-dash-manager/releases) and run it.
+
+The installer is not code-signed yet, so SmartScreen shows a warning: choose **More info → Run
+anyway**.
+
+### Updates
+
+The Home screen has an **Updates** panel: it shows your installed version, the latest release, the
+release notes, and gives you *Check for updates*, *Download*, and *Restart & install* buttons with
+download progress. Nothing is downloaded or installed without you pressing the button, and the app
+checks quietly on startup and once an hour after that.
+
+While the repository is **private**, GitHub will not serve the release feed anonymously. Either make
+the repository public, or paste a GitHub token (read access to this repo is enough) into the panel —
+it is stored encrypted with Windows DPAPI and used only for update checks and downloads.
+
+### Install from the command line
+
+If you have the repository checked out, this pulls the newest release and runs its installer:
+
+```bash
+npm run install:latest                    # download + launch the installer
+npm run install:latest -- --silent        # install without the wizard
+npm run install:latest -- --download-only # just fetch the .exe
+```
+
+It prints the latest version and its release notes, verifies the download really is a Windows
+executable before running it, and uses `GH_TOKEN` or your `gh auth login` session for the private repo.
+
+### Run from source
+
+```bash
+npm install
+npm start
+```
+
+---
+
 ## What it looks like
 
 **Home — every service and account in one grid, with the account rail on the left.**
@@ -103,45 +144,6 @@ being stored, encrypted with DPAPI, revocable in one click, and never leave the 
   define a service and, optionally, how to read its API for status cards.
 
 ---
-
-## Install
-
-Download the latest installer from
-[Releases](https://github.com/FiredMosquito831/my-provider-dash-manager/releases) and run it.
-
-The installer is not code-signed yet, so SmartScreen shows a warning: choose **More info → Run
-anyway**.
-
-### Updates
-
-The Home screen has an **Updates** panel: it shows your installed version, the latest release, the
-release notes, and gives you *Check for updates*, *Download*, and *Restart & install* buttons with
-download progress. Nothing is downloaded or installed without you pressing the button, and the app
-also checks quietly on startup and every four hours.
-
-While the repository is **private**, GitHub will not serve the release feed anonymously. Either make
-the repository public, or paste a GitHub token (read access to this repo is enough) into the panel —
-it is stored encrypted with Windows DPAPI and used only for update checks and downloads.
-
-### Install from the command line
-
-If you have the repository checked out, this pulls the newest release and runs its installer:
-
-```bash
-npm run install:latest                    # download + launch the installer
-npm run install:latest -- --silent        # install without the wizard
-npm run install:latest -- --download-only # just fetch the .exe
-```
-
-It prints the latest version and its release notes, verifies the download really is a Windows
-executable before running it, and uses `GH_TOKEN` or your `gh auth login` session for the private repo.
-
-### Run from source
-
-```bash
-npm install
-npm start
-```
 
 ---
 

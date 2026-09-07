@@ -1,6 +1,6 @@
 {
   "name": "multi-acc-manager",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Multi-account manager for Vercel/Netlify/Supabase-style dashboards",
   "main": "src/main.js",
   "scripts": {

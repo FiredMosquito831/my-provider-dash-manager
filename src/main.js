@@ -752,8 +752,8 @@ function runInteractive(captureMode = false) {
   // Update system: version tracking + release info + explicit user-driven download/install.
   // Nothing downloads or installs on its own; the UI shows what is available and you decide.
   updater.init(s => { if (win && win.webContents && !win.webContents.isDestroyed()) win.webContents.send('update-state', s); });
-  updater.check().catch(() => {});                                     // one check at startup
-  setInterval(() => updater.check().catch(() => {}), 4 * 60 * 60 * 1000); // and every 4 hours
+  updater.check().catch(() => {});                                 // one check at startup
+  setInterval(() => updater.check().catch(() => {}), 60 * 60 * 1000); // and hourly after that
   const applyBounds = () => {
     const [w, h] = win.getContentSize();
     // reserve the left rail: account views start after it, so the rail (and Home) is always reachable

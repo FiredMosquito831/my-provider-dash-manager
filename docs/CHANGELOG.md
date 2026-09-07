@@ -2,6 +2,13 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.2.5 — 2026-09-07
+
+### Changed
+- Update checks now run **hourly** (was every four hours), still on startup as well. The Updates panel
+  and its Check / Download / Restart & install buttons are unchanged.
+- README restructured: **Install** now sits directly under the introduction, ahead of the screenshots.
+
 ## 0.2.4 — 2026-09-07
 
 ### Added
