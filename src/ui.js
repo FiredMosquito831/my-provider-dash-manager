@@ -2,6 +2,7 @@ let services = [];
 let registry = [];
 let state = { activeKey: null, warmLimit: 5, tabs: [], groupTabs: false, collapsed: [] };
 let filterText = '';
+let credStats = null;
 
 const $tabctl = document.getElementById('tabctl');
 const $tabs = document.getElementById('tabs');
@@ -31,6 +32,8 @@ const ICONS = {
   refresh: '<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>',
   shield: '<path d="M12 3l8 3v6c0 4.6-3.2 8.4-8 9-4.8-.6-8-4.4-8-9V6l8-3Z"/>',
   contrast: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18Z" fill="currentColor" stroke="none"/>',
+  key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.5 12.5 8-8"/><path d="m16 7 2.5 2.5"/><path d="m19 4 2 2"/>',
+  download: '<path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/>',
 };
 function icon(n) { return `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`; }
 
@@ -165,12 +168,14 @@ function acctRow(a) {
     : `<button class="act" data-open="${esc(a.key)}" title="Open this account in a tab" aria-label="Open tab">${icon('play')}</button>`;
   const closeAct = tab
     ? `<button class="act" data-close="${esc(a.key)}" title="Close tab" aria-label="Close tab">${icon('x')}</button>` : '';
+  const fillAct = tab && tab.live
+    ? `<button class="act" data-fill="${esc(a.key)}" title="Fill this account's saved login into the page" aria-label="Fill login">${icon('key')}</button>` : '';
   return `<div class="acct ${isActive ? 'active' : ''} ${tab ? 'open' : ''}" data-row="${esc(a.key)}" title="${esc(a.label)}">
     <span class="dot" style="background:${colorOf(a.colorIdx, a.svc)}"></span>
     <span class="aname">${esc(a.label)}</span>
     ${badge}
     <span class="acts">
-      ${openAct}${closeAct}
+      ${openAct}${fillAct}${closeAct}
       <button class="act" data-connect="${esc(a.key)}" title="${a.hasToken ? 'API token connected — manage' : 'Connect an API token'}" aria-label="Connect token" style="${a.hasToken ? 'color:var(--ok)' : ''}">${icon('link')}</button>
       <button class="act" data-gear="${esc(a.key)}" title="Manage account" aria-label="Manage account">${icon('gear')}</button>
     </span>
@@ -200,6 +205,13 @@ $railScroll.addEventListener('click', async e => {
   }
   const add = e.target.closest('[data-add]');
   if (add) { e.stopPropagation(); openAddModal(add.getAttribute('data-add')); return; }
+  const fill = e.target.closest('[data-fill]');
+  if (fill) {
+    e.stopPropagation();
+    try { await window.api.fillLogin(fill.getAttribute('data-fill')); }
+    catch (err) { alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); }
+    return;
+  }
   const sleep = e.target.closest('[data-sleep]');
   if (sleep) { e.stopPropagation(); window.api.sleepTab(sleep.getAttribute('data-sleep')); return; }
   const close = e.target.closest('[data-close]');
@@ -256,7 +268,18 @@ function renderHome() {
           <div class="card addcard" data-add2="${esc(svc.key)}" title="Add a ${esc(svc.name)} account">${icon('plus')} Add account</div>
         </div>
       </div>`;
-    }).join('')}`;
+    }).join('')}
+    <div class="svcgroup">
+      <div class="head"><span class="name">Saved logins</span>
+        <span class="policy">${credStats ? `${credStats.total} stored · encrypted with Windows DPAPI` : ''}</span></div>
+      <div class="sub" style="margin-bottom:0">
+        <button class="ctlbtn ${st.saveLogins ? 'on' : ''}" id="t-saveLogins" title="Remember logins you type in account tabs">${icon('key')} Remember logins</button>
+        <button class="ctlbtn ${st.autofill ? 'on' : ''}" id="t-autofill" title="Fill the saved login automatically when a sign-in page appears">${icon('play')} Auto-fill</button>
+        <button class="ctlbtn" id="imp-browser" title="Import saved passwords from an installed browser">${icon('download')} Import from browser</button>
+        <button class="ctlbtn" id="imp-csv" title="Import a password CSV exported from any browser">${icon('download')} Import CSV</button>
+        ${credStats && credStats.total ? `<button class="ctlbtn" id="imp-clear" title="Delete every stored login">${icon('x')} Clear</button>` : ''}
+      </div>
+    </div>`;
 }
 
 function cardHtml(svc, a) {
@@ -296,6 +319,22 @@ $home.addEventListener('change', async e => {
 $home.addEventListener('click', async e => {
   const refresh = e.target.closest('#refresh-status');
   if (refresh) { refresh.disabled = true; await window.api.refreshAllStatus().catch(() => {}); refresh.disabled = false; return; }
+  if (e.target.closest('#imp-browser')) { openImportModal(); return; }
+  if (e.target.closest('#imp-csv')) {
+    try {
+      const r = await window.api.credsImportCsv();
+      if (r) { credStats = await window.api.credsStats(); renderHome(); alert(`Imported ${r.added} new logins (${r.found} found, ${credStats.total} stored).`); }
+    } catch (err) { alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); }
+    return;
+  }
+  if (e.target.closest('#imp-clear')) {
+    if (confirm('Delete every stored login? Sessions stay signed in; only saved passwords are removed.')) {
+      await window.api.credsClear();
+      credStats = await window.api.credsStats();
+      renderHome();
+    }
+    return;
+  }
   const toggle = e.target.closest('[id^="t-"]');
   if (toggle) {
     const name = toggle.id.slice(2);
@@ -345,6 +384,41 @@ async function doAdd(svc, mode) {
     const box = $modal.querySelector('#m-error');
     if (box) box.textContent = `Failed to add account: ${err.message}`;
   }
+}
+
+async function openImportModal() {
+  $modal.innerHTML = `<h3>Import passwords from a browser</h3><div class="note">Scanning…</div>`;
+  $modalBack.hidden = false;
+  window.api.setModalOpen(true);
+  let list = [];
+  try { list = await window.api.credsBrowsers(); } catch {}
+  $modal.innerHTML = `
+    <h3>Import passwords from a browser</h3>
+    ${list.length ? list.map((b, i) => `
+      <div class="row"><button class="btn-plain" data-imp="${i}" style="text-align:left">${esc(b.browser)} — ${esc(b.profile)}</button></div>`).join('')
+      : '<div class="note">No Chrome, Edge, Brave, Vivaldi or Opera profile with saved passwords was found.</div>'}
+    <div id="m-error" style="font-size:11px;margin-top:10px;line-height:1.5"></div>
+    <div class="row"><button class="btn-plain" id="m-cancel">Close</button></div>
+    <div class="note">Close the browser first so its password database is readable. Chrome 127+ can lock entries with app-bound encryption — those must be exported to CSV from the browser instead (Settings → Passwords → Export). Firefox always uses the CSV path.</div>`;
+  $modal.querySelector('#m-cancel').onclick = closeModal;
+  $modal.querySelectorAll('[data-imp]').forEach(btn => {
+    btn.onclick = async () => {
+      const b = list[Number(btn.getAttribute('data-imp'))];
+      const box = $modal.querySelector('#m-error');
+      box.style.color = 'var(--muted)';
+      box.textContent = 'Importing…';
+      try {
+        const r = await window.api.credsImportBrowser(b.id);
+        credStats = await window.api.credsStats();
+        box.style.color = r.added ? 'var(--ok)' : 'var(--warn)';
+        box.textContent = `${r.added} new logins imported (${r.found} readable of ${r.found + r.locked + r.failed}).` + (r.note ? ` ${r.note}` : '');
+        renderHome();
+      } catch (err) {
+        box.style.color = 'var(--danger)';
+        box.textContent = String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      }
+    };
+  });
 }
 
 function openAddServiceModal() {
@@ -469,6 +543,7 @@ window.api.onTabsState(s => {
   state.warmLimit = (settings && settings.warmLimit) || 5;
   state.groupTabs = !!(settings && settings.groupTabs);
   state.collapsed = (settings && settings.collapsed) || [];
+  credStats = await window.api.credsStats().catch(() => null);
   renderAll();
   window.api.uiReady(); // triggers session restore in main
   window.api.refreshAllStatus().catch(() => {});

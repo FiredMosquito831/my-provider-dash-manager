@@ -1,6 +1,6 @@
 {
   "name": "multi-acc-manager",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Multi-account manager for Vercel/Netlify/Supabase-style dashboards",
   "main": "src/main.js",
   "scripts": {
@@ -10,7 +10,9 @@
     "smoke:restore": "electron . --smoke-restore",
     "smoke:tokens": "electron . --smoke-tokens",
     "capture": "electron . --capture",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win",
+    "smoke:creds": "electron . --smoke-creds",
+    "smoke:autofill": "electron . --smoke-autofill"
   },
   "devDependencies": {
     "electron": "^43.0.0",
@@ -22,9 +24,23 @@
   "build": {
     "appId": "com.firedmosquito.my-provider-dash-manager",
     "productName": "My Provider Dash Manager",
-    "files": ["src/**/*", "package.json"],
-    "win": { "target": ["nsis"] },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
-    "publish": { "provider": "github", "owner": "FiredMosquito831", "repo": "my-provider-dash-manager" }
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "FiredMosquito831",
+      "repo": "my-provider-dash-manager"
+    }
   }
 }

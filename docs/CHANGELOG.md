@@ -2,6 +2,39 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.2.0 — 2026-09-07
+
+### Added
+- **Left account rail (persistent)**: providers listed vertically with collapse/expand, accounts nested
+  under each, per-account actions on hover — open, sleep, close, fill login, connect token, manage.
+  Includes a Home button, Status/Sleep footer actions, and an "Add service" button.
+- **Top bar is now tabs-only**: filter box and group-by-provider toggle; grouped mode gets collapsible
+  per-provider sections. Slept tabs stay in the strip (dimmed) and resume on click.
+- **Tab session memory**: the open-tab set persists to `session.json` and is restored on the next
+  launch — tabs up to the warm limit come back live, the rest asleep, and the app lands on Home.
+- **Saved logins**: logins typed inside an account tab are remembered (encrypted with Windows DPAPI)
+  and bound to that account, so each account on a service refills with its own credentials.
+  Auto-fill on sign-in pages (toggleable), plus a per-account "fill login" action.
+- **Password import**: direct import from installed Chromium browsers (Chrome, Edge, Brave, Vivaldi,
+  Opera) by decrypting Login Data with the DPAPI-wrapped key, plus universal CSV import (works for
+  Firefox and any browser). Entries locked by Chrome 127+ app-bound encryption are detected and
+  reported with CSV guidance rather than failing silently.
+- **Native ad-blocking** (uBlock-style): EasyList network rules (~52k hosts) with weekly refresh and a
+  seed fallback, plus generic cosmetic filtering; per-partition, never blocks main frames.
+- **Dark mode** (Dark Reader-style): nativeTheme dark so sites use their own dark theme, plus an
+  optional force-dark inversion for sites without one.
+- **Phase 2 — any service by URL**: user-added services get their own rail row and fully isolated
+  per-account sessions, exactly like the built-in providers.
+- Smoke suites: `smoke:creds` (import, per-account recall, encryption at rest) and `smoke:autofill`
+  (real page, real preload: form detection, fill, capture on submit).
+
+### Fixed
+- **Left rail vanished when a tab opened**, making Home unreachable: account views spanned the whole
+  content area. Views now start after the rail (x = RAIL_W).
+- **Home was unreachable with several tabs open**: showing Home slept the active tab, which
+  auto-activated the next one. Home now hides views and keeps tabs warm instead.
+- Hidden rail action buttons no longer reserve layout space (account names stopped truncating).
+
 ## Unreleased
 
 ### Added

@@ -5,6 +5,7 @@ const SERVICES = require('./services');
 const tokens = require('./api-tokens');
 const { PROVIDERS } = require('./providers');
 const content = require('./content');
+const creds = require('./credentials');
 
 const statusCache = new Map(); // accountKey -> { summary?, error?, fetchedAt } — summaries only, tokens never leave main
 
@@ -29,7 +30,7 @@ function writeJson(file, data) {
 
 const store = {
   accounts: [], // {svc, id, label, colorIdx, proxy, createdAt, lastState}
-  settings: { warmLimit: 5, groupTabs: false, collapsed: [], adBlock: true, darkMode: true, forceDark: false },
+  settings: { warmLimit: 5, groupTabs: false, collapsed: [], adBlock: true, darkMode: true, forceDark: false, saveLogins: true, autofill: true },
   openTabs: [], // session memory: [{svc, id, url, lastActivated, active}] — survives restarts
   customServices: [], // Phase 2: user-added services {key,name,dashboardUrl,loginUrl,color,custom:true}
   save() {
@@ -40,7 +41,7 @@ const store = {
   saveSession() { writeJson(userDataPath('session.json'), this.openTabs); },
   load() {
     this.accounts = readJson(userDataPath('accounts.json'), []);
-    this.settings = Object.assign({ warmLimit: 5, groupTabs: false, collapsed: [], adBlock: true, darkMode: true, forceDark: false }, readJson(userDataPath('settings.json'), {}));
+    this.settings = Object.assign({ warmLimit: 5, groupTabs: false, collapsed: [], adBlock: true, darkMode: true, forceDark: false, saveLogins: true, autofill: true }, readJson(userDataPath('settings.json'), {}));
     this.openTabs = readJson(userDataPath('session.json'), []);
     this.customServices = readJson(userDataPath('services.json'), []);
   },
@@ -147,6 +148,9 @@ class ViewManager {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
+        // isolated-world helper: remembers logins you type and fills them back on request.
+        // It exposes nothing to the page.
+        preload: path.join(__dirname, 'account-preload.js'),
       },
     });
     view.setBackgroundColor('#ffffff'); // sync background: avoids paint-flash on switch (Electron #43293)
@@ -499,6 +503,96 @@ async function runSmokeTokens() {
   app.exit(results.checks.every(c => c.ok) ? 0 : 1);
 }
 
+// ---------- smoke creds: CSV import, per-account remember/recall, encryption at rest ----------
+async function runSmokeCreds() {
+  const results = { mode: 'creds', checks: [] };
+  const check = (name, ok, detail = '') => { results.checks.push({ name, ok, detail }); console.log(`[smoke:creds] ${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`); };
+  const csv = path.join(app.getPath('temp'), `mam-creds-${process.pid}.csv`);
+  fs.writeFileSync(csv, 'url,username,password\nhttps://vercel.com/login,alice@example.com,hunter2\nhttps://app.netlify.com/login,bob@example.com,s3cret\n');
+  try {
+    const r = creds.importFromCsv(csv);
+    check('csv-import', r.added === 2 && r.total >= 2, JSON.stringify({ added: r.added, total: r.total }));
+
+    const rem = creds.rememberForAccount('vercel', 'acc9', { url: 'https://vercel.com/login', username: 'typed@example.com', password: 'typed-pw' });
+    check('remember-for-account', rem.saved === true);
+    const got = creds.forAccount('vercel', 'acc9', 'https://vercel.com/login');
+    check('recall-bound-to-account', !!got && got.username === 'typed@example.com' && got.password === 'typed-pw');
+
+    // an account with no saved login falls back to an imported credential for the same host
+    const fb = creds.forAccount('vercel', 'never-signed-in', 'https://vercel.com/login');
+    check('host-fallback-from-import', !!fb && fb.username === 'alice@example.com', fb ? fb.username : 'none');
+
+    const raw = fs.readFileSync(path.join(app.getPath('userData'), 'credentials.json'), 'utf8');
+    check('encrypted-at-rest', !raw.includes('hunter2') && !raw.includes('typed-pw'));
+
+    const st = creds.stats();
+    check('stats', st.total >= 3, JSON.stringify(st.bySource));
+    const browsers = creds.listChromiumProfiles();
+    console.log(`[smoke:creds] INFO detected browser profiles: ${browsers.map(b => `${b.browser}/${b.profile}`).join(', ') || 'none'}`);
+    creds.clearAll();
+    check('clear', creds.stats().total === 0);
+  } catch (err) {
+    check('exception', false, err.message);
+  } finally {
+    try { fs.rmSync(csv, { force: true }); } catch {}
+  }
+  fs.writeFileSync(path.join(__dirname, '..', 'smoke-report.json'), JSON.stringify(results, null, 2));
+  app.exit(results.checks.every(c => c.ok) ? 0 : 1);
+}
+
+// ---------- smoke autofill: real page, real preload — fill AND capture ----------
+async function runSmokeAutofill() {
+  const results = { mode: 'autofill', checks: [] };
+  const check = (name, ok, detail = '') => { results.checks.push({ name, ok, detail }); console.log(`[smoke:autofill] ${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`); };
+  const page = path.join(app.getPath('temp'), `mam-login-${process.pid}.html`);
+  fs.writeFileSync(page, `<!doctype html><meta charset=utf-8><title>Login</title>
+    <form id=f><input name=email type=email><input name=pw type=password><button type=submit>Sign in</button></form>`);
+
+  const win = new BaseWindow({ width: 900, height: 700, show: false });
+  const vm = new ViewManager();
+  vm.attach(win);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // capture: the preload must report credentials typed into a real form
+  let captured = null;
+  ipcMain.on('credential-captured', (_e, d) => { captured = d; });
+  let formSeen = false;
+  ipcMain.on('login-form-present', (_e, i) => { if (i && i.present) formSeen = true; });
+
+  vm.create('vercel', 'autofilltest', `file:///${page.replace(/\\/g, '/')}`, { show: false });
+  const tab = vm.tabs.get(accountKey('vercel', 'autofilltest'));
+  await new Promise(r => tab.view.webContents.once('did-finish-load', r));
+  await sleep(1500);
+  check('preload-detected-login-form', formSeen);
+
+  // fill: main pushes a stored credential into the page
+  creds.rememberForAccount('vercel', 'autofilltest', { url: 'https://vercel.com/login', username: 'me@example.com', password: 'p@ss-fill' });
+  const cred = creds.forAccount('vercel', 'autofilltest', 'https://vercel.com/login');
+  tab.view.webContents.send('fill-credential', { username: cred.username, password: cred.password, submit: false });
+  await sleep(800);
+  const filled = await tab.view.webContents.executeJavaScript(
+    `({ email: document.querySelector('[name=email]').value, pw: document.querySelector('[name=pw]').value })`);
+  check('fill-username', filled.email === 'me@example.com', filled.email);
+  check('fill-password', filled.pw === 'p@ss-fill', filled.pw ? '(set)' : '(empty)');
+
+  // capture: submitting the form must hand the credentials back to main
+  await tab.view.webContents.executeJavaScript(`(() => {
+    const f = document.getElementById('f');
+    document.querySelector('[name=email]').value = 'typed@example.com';
+    document.querySelector('[name=pw]').value = 'typed-secret';
+    f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    return true;
+  })()`);
+  await sleep(800);
+  check('capture-on-submit', !!captured && captured.username === 'typed@example.com' && captured.password === 'typed-secret',
+    captured ? captured.username : 'nothing captured');
+
+  creds.clearAll();
+  try { fs.rmSync(page, { force: true }); } catch {}
+  fs.writeFileSync(path.join(__dirname, '..', 'smoke-report.json'), JSON.stringify(results, null, 2));
+  app.exit(results.checks.every(c => c.ok) ? 0 : 1);
+}
+
 // ---------- smoke restore: app restart, verify partitions persisted ----------
 async function runSmokeRestore() {
   const win = new BaseWindow({ width: 1280, height: 800, show: false });
@@ -680,6 +774,67 @@ function runInteractive(captureMode = false) {
     return true;
   });
   ipcMain.handle('close-tab', (_e, key) => vm.closeTab(key));
+
+  // ---------- saved logins: capture what you type, fill it back later ----------
+  function tabForSender(senderWc) {
+    for (const [key, t] of vm.tabs) if (t.view.webContents.id === senderWc.id) return { key, tab: t };
+    return null;
+  }
+  ipcMain.on('credential-captured', (e, data) => {
+    if (!store.settings.saveLogins) return;
+    const found = tabForSender(e.sender);
+    if (!found || !data || !data.password) return;
+    try {
+      const res = creds.rememberForAccount(found.tab.svc, found.tab.id, data);
+      if (res.saved) {
+        console.log(`[logins] remembered ${data.username || '(no user)'} for ${found.key}`);
+        vm.emitState();
+      }
+    } catch (err) { console.error('[logins] save failed:', err.message); }
+  });
+  ipcMain.on('login-form-present', (e, info) => {
+    const found = tabForSender(e.sender);
+    if (!found) return;
+    found.tab.loginForm = !!(info && info.present);
+    // auto-fill this account's own remembered login when its sign-in page appears
+    if (found.tab.loginForm && store.settings.autofill) {
+      const svcCfg = serviceByKey(found.tab.svc);
+      const cred = creds.forAccount(found.tab.svc, found.tab.id, svcCfg && svcCfg.loginUrl);
+      if (cred) e.sender.send('fill-credential', { username: cred.username, password: cred.password, submit: false });
+    }
+    vm.emitState();
+  });
+  ipcMain.on('fill-result', () => {});
+
+  ipcMain.handle('fill-login', (_e, key) => {
+    const t = vm.tabs.get(key);
+    if (!t) throw new Error('That tab is asleep — open it first');
+    const [svc, id] = key.split('::');
+    const svcCfg = serviceByKey(svc);
+    const cred = creds.forAccount(svc, id, svcCfg && svcCfg.loginUrl);
+    if (!cred) throw new Error('No saved login for this account yet — sign in once and it will be remembered');
+    t.view.webContents.send('fill-credential', { username: cred.username, password: cred.password, submit: false });
+    return true;
+  });
+  ipcMain.handle('creds-stats', () => creds.stats());
+  ipcMain.handle('creds-browsers', () => creds.listChromiumProfiles().map(p => ({ browser: p.browser, profile: p.profile, id: p.loginData })));
+  ipcMain.handle('creds-import-browser', async (_e, id) => {
+    const p = creds.listChromiumProfiles().find(x => x.loginData === id);
+    if (!p) throw new Error('Browser profile not found');
+    return creds.importFromChromium(p);
+  });
+  ipcMain.handle('creds-import-csv', async () => {
+    const { dialog } = require('electron');
+    const r = await dialog.showOpenDialog({ title: 'Import passwords from CSV', filters: [{ name: 'CSV', extensions: ['csv'] }], properties: ['openFile'] });
+    if (r.canceled || !r.filePaths[0]) return null;
+    return creds.importFromCsv(r.filePaths[0]);
+  });
+  ipcMain.handle('creds-clear', () => creds.clearAll());
+  ipcMain.handle('creds-for-account', (_e, svc, id) => {
+    const svcCfg = serviceByKey(svc);
+    const c = creds.forAccount(svc, id, svcCfg && svcCfg.loginUrl);
+    return c ? { username: c.username, host: c.host, source: c.source } : null; // never the password
+  });
   // ---------- Phase 2: user-added generic services (any URL) ----------
   ipcMain.handle('add-service', (_e, { name, url }) => {
     const clean = String(name || '').trim();
@@ -710,7 +865,7 @@ function runInteractive(captureMode = false) {
     return true;
   });
   ipcMain.handle('set-content-setting', (_e, name, value) => {
-    if (!['adBlock', 'darkMode', 'forceDark'].includes(name)) throw new Error(`unknown setting: ${name}`);
+    if (!['adBlock', 'darkMode', 'forceDark', 'saveLogins', 'autofill'].includes(name)) throw new Error(`unknown setting: ${name}`);
     store.settings[name] = !!value;
     store.save();
     if (name === 'darkMode') content.setNativeDark(store.settings.darkMode);
@@ -818,7 +973,7 @@ function cycleTab(vm, dir) {
 }
 
 // test modes default to an isolated userData: they can never pollute the real registry/partitions
-const TEST_FLAGS = ['--spike', '--smoke', '--smoke-restore', '--smoke-tokens'];
+const TEST_FLAGS = ['--spike', '--smoke', '--smoke-restore', '--smoke-tokens', '--smoke-creds', '--smoke-autofill'];
 const testFlag = TEST_FLAGS.find(f => process.argv.includes(f));
 if (testFlag && !process.env.MAM_USER_DATA) {
   const dirName = testFlag === '--smoke-restore' ? 'mam-test-smoke' : `mam-test-${testFlag.slice(2)}`;
@@ -839,6 +994,8 @@ if (!gotLock) {
     else if (process.argv.includes('--smoke')) runSmoke().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke-restore')) runSmokeRestore().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke-tokens')) runSmokeTokens().catch(err => { console.error(err); app.exit(1); });
+    else if (process.argv.includes('--smoke-creds')) runSmokeCreds().catch(err => { console.error(err); app.exit(1); });
+    else if (process.argv.includes('--smoke-autofill')) runSmokeAutofill().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--capture')) runInteractive(true);
     else runInteractive();
   });
