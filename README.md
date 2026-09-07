@@ -1,41 +1,60 @@
 # My Provider Dash Manager
 
-**One desktop app for every account you own.** Keep several Google, Microsoft, AWS, Vercel,
-Netlify, Cloudflare, Supabase, GitHub, npm, Stripe, Gmail, Outlook, Proton Mail (and 25 more) accounts
-signed in at the same time, each in a fully isolated session, and switch between them instantly — the
-way a browser handles tabs, but built around *accounts* instead of pages.
+**One desktop app for every account you own.** Keep several Google, Microsoft, AWS, Vercel, Netlify,
+Cloudflare, Supabase, GitHub, npm, Stripe, Gmail, Outlook and Proton Mail accounts (37 services built
+in, any site by URL) signed in at the same time, each in a fully isolated session, and switch between
+them instantly — the way a browser handles tabs, but built around *accounts* instead of pages.
 
 <sub>Windows desktop app · Electron 43 · local-first · no telemetry, no account, no server ·
 source-available licence: free for personal and commercial use</sub>
+
+![Home — the account rail on the left, every account as a card, the installed version bottom-left](docs/screenshots/home.png)
+
+![A Gmail account open in the app, with back / forward / reload / dashboard and the address bar in the strip](docs/screenshots/navigation.png)
+
+<sub>Screenshots use a demo profile with placeholder account names.</sub>
 
 ---
 
 ## Install
 
-Download the latest installer from
-[Releases](https://github.com/FiredMosquito831/my-provider-dash-manager/releases) and run it.
-
-The installer is not code-signed yet, so SmartScreen shows a warning: choose **More info → Run
-anyway**.
-
-### Updates
-
-The Home screen has an **Updates** panel: it shows your installed version, the latest release, the
-release notes, and gives you *Check for updates*, *Download*, and *Restart & install* buttons with
-download progress. Nothing is downloaded or installed without you pressing the button, and the app
-checks quietly on startup and once an hour after that.
-
-The repository is public, so updates need no setup. (If you ever fork this into a private repo, the
-panel lets you store a GitHub token, encrypted with Windows DPAPI, so the feed stays readable.)
-
-### Install from the command line
+**Fastest — from the command line** (needs Node.js 18+):
 
 ```bash
-npx my-provider-dash-manager            # install (or update) and launch
+npx my-provider-dash-manager
 ```
 
-The same CLI manages the whole lifecycle — install it globally with
-`npm i -g my-provider-dash-manager` and the commands are also available as `mpdm`:
+That downloads the newest installer from GitHub, verifies it is a real Windows executable, runs it,
+and launches the app. Run the same command again later to update.
+
+**Or download the installer** from
+[Releases](https://github.com/FiredMosquito831/my-provider-dash-manager/releases) and run it.
+
+The installer is not code-signed yet, so SmartScreen shows a warning the first time: choose
+**More info → Run anyway**. The app installs per user under `%LOCALAPPDATA%\Programs` and creates
+Start Menu and Desktop shortcuts. Your accounts, sessions and saved logins live in
+`%APPDATA%\multi-acc-manager` and survive updates and reinstalls.
+
+### Updating
+
+Three ways, all ending in the same place:
+
+- **Inside the app.** The version is always shown bottom-left in the rail. When a newer release
+  exists it turns into an **Update x.y.z** button; click it to open the Updates panel on Home, which
+  shows the release notes and offers **Download** and **Restart & install** with progress. The app
+  checks quietly on startup and once an hour after that. Nothing is downloaded or installed until you
+  press the button.
+- **From the command line.** `npx my-provider-dash-manager` (or `mpdm update` if installed globally)
+  installs the newest release over the current one. Close the app first, or the running copy keeps
+  showing the old version until you restart it.
+- **From the release page.** Run the newest installer; it upgrades in place.
+
+The repository is public, so updates need no token or account.
+
+### The CLI
+
+The npm package is a small lifecycle CLI. Install it globally with `npm i -g my-provider-dash-manager`
+and it is also available as `mpdm`:
 
 | Command | What it does |
 |---|---|
@@ -44,13 +63,10 @@ The same CLI manages the whole lifecycle — install it globally with
 | `… start` | Launch the installed app |
 | `… status` | Installed version vs latest, plus where the app and your data live |
 | `… where` | Print the install and data paths |
-| `… uninstall` | Run the uninstaller (your accounts and sessions are kept) |
+| `… uninstall` | Run the uninstaller (accounts and sessions are kept) |
 
 Flags: `--silent` (no wizard), `--download-only`, `--force`, `--version`, `--help`.
 From a checkout of this repository the equivalent is `npm run install:latest`.
-
-It prints the latest version and its release notes and verifies the download really is a Windows
-executable before running it. No authentication is needed; a `GH_TOKEN` is used only if present.
 
 ### Run from source
 
@@ -61,40 +77,10 @@ npm start
 
 ---
 
-## What it looks like
-
-**Home — every service and account in one grid, with the account rail on the left.**
-Each provider lists its accounts; hovering one reveals open / sleep / close / fill-login / connect-token / manage.
-
-![Home screen](docs/screenshots/home.png)
-
-**A real dashboard, signed in, inside the app.** The rail and tab strip stay put, so Home is always one click away.
-
-![A dashboard open in the app](docs/screenshots/dashboard.png)
-
-Browser controls appear in the strip while a tab is open: back, forward, reload, dashboard, and an
-address bar that navigates inside that account's own session.
-
-![Navigation bar with a Gmail sign-in open](docs/screenshots/navigation.png)
-
-**The top bar is only your open tabs** — filter them, or group them by provider with collapsible sections.
-Slept tabs stay in the strip (dimmed) and resume on click.
-
-![Tabs grouped by provider](docs/screenshots/tabs-grouped.png)
-
-**Updates and saved logins live on Home**: installed vs latest version with release notes and an update
-button, plus login remembering, auto-fill and password import.
-
-![Updates and saved logins](docs/screenshots/settings.png)
-
-<sub>Screenshots use a demo profile with placeholder account names.</sub>
-
----
-
 ## Why it exists
 
-Every cloud provider assumes you have exactly one identity. The moment you have a personal account
-and a client account on the same service, the browser fights you:
+Every provider assumes you have exactly one identity. The moment you have a personal account and a
+client account on the same service, the browser fights you:
 
 | The usual pain | What this app does |
 |---|---|
@@ -110,6 +96,27 @@ sessions, one place.
 
 ---
 
+## Using it
+
+1. **Add an account.** Click **Add account** at the bottom of the rail (or the `+` next to a provider
+   you already use), pick the service from the searchable picker, name the account, then choose
+   *Log in* or *Create a new account*. The service's real sign-in page opens inside that account's own
+   isolated session.
+2. **Sign in normally.** Google services sign in directly. On other sites use email/password or
+   GitHub rather than "Continue with Google", which Google blocks inside embedded browsers; the
+   **Browser** button finishes any stubborn flow in your system browser.
+3. **Switch accounts** by clicking a tab or a rail row. Everything stays signed in.
+4. **Browse.** While a tab is open the strip shows back, forward, reload, a back-to-dashboard button
+   and an address bar. Type any address and press Enter to open it inside that account's session.
+5. **Connect a token** (optional) via the link icon on an account to light up its status card.
+6. **Import passwords** (optional) from Home → *Import from browser* or *Import CSV*.
+
+Keyboard: `Ctrl+W` sleep tab · `Ctrl+Shift+W` sleep all · `Ctrl+Tab` cycle · `Ctrl+1…9` jump ·
+`Esc` Home · `Alt+Left` / `Alt+Right` back / forward · `Ctrl+R` or `F5` reload · `Alt+Home` dashboard
+· `Ctrl+L` address bar.
+
+---
+
 ## Features
 
 ### Accounts and sessions
@@ -120,36 +127,25 @@ sessions, one place.
 - **Instant switching.** Active tabs stay warm, so switching is a visibility toggle, not a reload.
 - **Warm-tab limit with sleeping.** Each live dashboard costs roughly 125 MB, so the app keeps a
   configurable number warm (default 5) and sleeps the rest. Slept tabs stay in the strip and resume on
-  click, and sleeping returns the app to about 350 MB. Measured: 5 tabs ≈ 1.0 GB, 10 ≈ 1.6 GB, all
-  slept ≈ 0.35 GB (private memory, the figure Task Manager reports).
+  click. Measured: 5 tabs ≈ 1.0 GB, 10 ≈ 1.6 GB, all slept ≈ 0.35 GB (private memory, the figure Task
+  Manager reports).
 - **Tab session memory.** The set of open tabs is saved and restored on the next launch: recent ones
-  come back warm, the rest asleep, and you land on the Home grid.
+  come back warm, the rest asleep, and you land on Home.
 - **Per-account proxy** (optional) with proper connection flushing.
 
-### Layout
-- **Left rail — your identities.** Providers listed vertically, accounts nested underneath, each with
-  hover actions: open, sleep, close, fill login, connect an API token, manage. Collapse any provider.
-- **Top bar — open tabs only.** A filter box and a group-by-provider toggle with collapsible groups.
-- **Home** is always one click (or `Esc`) away: a grid of every service and account with live status.
-- **Browser controls** while a tab is open: back, forward, reload/stop, back-to-dashboard, and an
-  editable address bar that navigates inside that account's own session (http/https only).
-- Keyboard: `Ctrl+W` sleep, `Ctrl+Shift+W` sleep all, `Ctrl+Tab` cycle, `Ctrl+1…9` jump,
-  `Alt+Left`/`Alt+Right` back/forward, `Ctrl+R`/`F5` reload, `Alt+Home` dashboard, `Ctrl+L` address.
-
-### Saved logins
-- **Remembers logins you type** inside an account tab, bound to *that* account, so two accounts on the
-  same service refill with different credentials.
-- **Auto-fills sign-in pages** when it recognises one (toggleable), plus a manual fill action.
-- **Imports existing passwords** from installed Chromium browsers (Chrome, Edge, Brave, Vivaldi,
-  Opera) or from a CSV exported by any browser, including Firefox.
-- Everything is encrypted at rest with Windows DPAPI. Passwords never reach the app's own UI process.
-- **Origin-bound**: a login is tied to the account *and* the service's own domains. A password typed on
-  another site reached from that tab (an OAuth hand-off, a look-alike page) is never captured as that
-  account's login, and a saved password is never filled into a page outside the service's domains.
+### Layout and browsing
+- **Left rail — your identities.** Providers you use, accounts nested underneath, each with hover
+  actions: open, sleep, close, fill login, connect a token, manage. Collapse any provider. The
+  installed version (or an update button) sits at the bottom.
+- **Top bar — open tabs only,** with a filter box and group-by-provider with collapsible groups.
+- **Home** is always one click (or `Esc`) away: every account as a card with live status, the service
+  picker, the Updates panel and saved-login settings.
+- **Browser controls** while a tab is open: back, forward, reload/stop, back-to-dashboard and an
+  editable address bar. Navigation stays inside that account's session and accepts http/https only.
 
 ### Built-in services
 Thirty-seven services ship ready to use, grouped by category. The rail and Home show only the ones
-you have accounts on; everything else sits one click away behind **Add account**, a searchable picker.
+you have accounts on; everything else is one click away in the **Add account** picker.
 
 | Category | Services |
 |---|---|
@@ -164,22 +160,37 @@ you have accounts on; everything else sits one click away behind **Add account**
 | AI | OpenAI Platform, Claude Platform (Anthropic) |
 
 Every login page is verified to load inside an isolated partition, landing on a host the credential
-guard trusts, by `npm run smoke:services`. Google sign-in works directly in the app (verified against
-Google's own sign-in flow); "Continue with Google" buttons on *other* sites remain blocked by Google
-in embedded browsers, so use email/password or GitHub there. Anything else can be added by URL or as
-a plugin (below).
+guard trusts (`npm run smoke:services`). Google sign-in was verified against Google's own flow and
+works in the app. Anything else can be added by URL or as a plugin.
+
+### Saved logins
+- **Remembers logins you type** inside an account tab, bound to *that* account, so two accounts on the
+  same service refill with different credentials.
+- **Auto-fills sign-in pages** when it recognises one (toggleable), plus a manual fill action.
+- **Imports existing passwords** from installed Chromium browsers (Chrome, Edge, Brave, Vivaldi,
+  Opera) or from a CSV exported by any browser, including Firefox.
+- Encrypted at rest with Windows DPAPI. Passwords never reach the app's own UI process.
+- **Origin-bound**: a login is tied to the account *and* the service's own domains. A password typed on
+  another site reached from that tab (an OAuth hand-off, a look-alike page) is never captured as that
+  account's login, and a saved password is never filled into a page outside the service's domains.
 
 ### API status
-Paste a read-only API token into an account and its Home card shows live status — project, app,
-repository or package counts and names for every built-in service except PyPI (whose tokens are
-upload-only), latest deploy state on Vercel, and account name plus charges/payouts state on Stripe.
-The token field tells you which kind of credential each service expects (Docker Hub needs
-`username:token`). Tokens are validated before being stored, encrypted with DPAPI, revocable in one
-click, and never leave the main process.
+Paste a read-only API token into an account and its Home card shows live status: project, app,
+repository or package counts and names for every built-in developer service except PyPI (whose tokens
+are upload-only), latest deploy state on Vercel, account name plus charges/payouts state on Stripe.
+The token field says which credential each service expects. Tokens are validated before being stored,
+encrypted with DPAPI, revocable in one click, and never leave the main process.
+
+### Updates
+- Version always visible in the rail; an **Update** button appears when a newer release exists.
+- Updates panel on Home: installed vs latest, release notes, Check / Download / Restart & install with
+  progress. Nothing installs itself.
+- Startup and hourly checks against the public release feed.
 
 ### Content
 - **Ad-blocking** driven by EasyList (~52,000 blocked hosts plus generic cosmetic rules, refreshed
-  weekly) applied per account partition. Main-frame navigation is never blocked.
+  weekly), applied per account partition. Main-frame navigation and sign-in infrastructure are never
+  blocked.
 - **Dark mode**: sites that support `prefers-color-scheme` go dark natively, and an optional
   force-dark inversion covers the ones that don't.
 
@@ -188,30 +199,13 @@ click, and never leave the main process.
 - **Service plugins**: drop a small JSON manifest into `plugins/` (or install it from the UI) to
   define a service and, optionally, how to read its API for status cards.
 
----
-
----
-
-## Using it
-
-1. **Add an account** — click `+` next to a provider in the left rail, name it, then choose *Log in*
-   or *Create a new account*. The service's real page opens inside that account's isolated session.
-2. **Sign in normally.** Use email/password or GitHub. Avoid "Continue with Google": Google blocks
-   sign-in inside embedded browsers, so use the **Browser** button to finish that flow in your system
-   browser instead.
-3. **Switch accounts** by clicking a tab or a rail row. Everything stays signed in.
-4. **Connect a token** (optional) via the link icon on any account to light up its status card.
-5. **Import passwords** (optional) from Home → *Import from browser* or *Import CSV*.
-
 ### Multiple accounts and provider terms
-
-The app surfaces each provider's stance instead of hiding it. GitHub and Railway allow one account
-per person and the rail says so — use their organisations and workspaces instead. Vercel, Netlify,
+The app surfaces each provider's stance instead of hiding it. GitHub and Railway allow one account per
+person and the rail says so — use their organisations and workspaces instead. Vercel, Netlify,
 Supabase, Cloudflare, Heroku and DigitalOcean tolerate separate accounts but watch for abuse; the
-registries (npm, PyPI, Docker Hub, Hugging Face), GitLab, Fly.io, Neon and Stripe treat extra accounts
-as ordinary (Stripe expects one per business). Account creation is always
-manual and guided; nothing is ever automated, because automated signup violates several providers'
-acceptable-use policies.
+registries, GitLab, Fly.io, Neon, Google, Microsoft and the mail providers treat extra accounts as
+ordinary; Stripe expects one per business. Account creation is always manual and guided; nothing is
+ever automated, because automated signup violates several providers' acceptable-use policies.
 
 ---
 
@@ -223,46 +217,46 @@ chrome is always reachable. Account pages run sandboxed with context isolation, 
 permissions, and an isolated-world preload that handles login capture and filling without exposing
 anything to the page.
 
-State lives in your user-data folder: `accounts.json` (the registry), `session.json` (open tabs),
-`settings.json`, `services.json` (custom services), `plugins/`, plus DPAPI-encrypted `tokens.json`
-and `credentials.json`.
+State lives in `%APPDATA%\multi-acc-manager`: `accounts.json` (the registry), `session.json` (open
+tabs), `settings.json`, `services.json` (custom services), `plugins/`, plus DPAPI-encrypted
+`tokens.json` and `credentials.json`.
 
 ### Security posture, honestly
 
 Cookies, tokens and saved passwords are encrypted at rest with Windows DPAPI, which protects against
 another user on the machine, a stolen disk, and casual copying. It does **not** protect against
 malware running as you — no desktop app can, which is why the app never masks device identity and
-keeps API tokens scoped and revocable. Saved logins are additionally bound to the service's own origins,
-so they cannot be captured from — or filled into — an unrelated site. Nothing syncs anywhere: there is
-no server, no account and no telemetry.
+keeps API tokens scoped and revocable. Saved logins are additionally bound to the service's own
+origins, so they cannot be captured from, or filled into, an unrelated site. The address bar accepts
+http/https only. Nothing syncs anywhere: there is no server, no account and no telemetry.
 
 ---
 
 ## Development
 
 ```bash
-npm start            # run the app
-npm run smoke        # sessions, registry, partitions
-npm run smoke:restore# sessions survive a restart (real cookies)
-npm run smoke:tokens # DPAPI round-trip + live token rejection
-npm run smoke:creds  # import, per-account recall, encryption at rest
-npm run smoke:autofill # real page: form detection, fill, capture
-npm run smoke:updates  # version comparison + real release-feed check
-npm run smoke:services # every built-in login page loads inside an isolated partition
-npm run capture      # screenshot the running shell
-npm run spike        # memory benchmark
-npm run dist         # build the Windows installer
+npm start              # run the app
+npm run smoke          # sessions, registry, partitions, tab navigation (12 checks)
+npm run smoke:restore  # sessions survive a restart (real cookies)
+npm run smoke:tokens   # DPAPI round-trip + live fake-token rejection per provider (15)
+npm run smoke:creds    # import, per-account recall, encryption at rest (7)
+npm run smoke:autofill # real page: form detection, fill, capture, origin guard (10)
+npm run smoke:updates  # version comparison + real release-feed check (8)
+npm run smoke:services # every built-in login page loads inside an isolated partition (42)
+npm run capture        # screenshot the running shell (--capture-out, --capture-open svc::id, --capture-js)
+npm run spike          # memory benchmark
+npm run dist           # build the Windows installer locally
 npm run install:latest # fetch and run the latest released installer
-npm start -- --print-paths   # show the app name, version and data folder
+npm start -- --print-paths            # show the app name, version and data folder
 npm start -- --open vercel::personal  # open an account on launch
 ```
 
-The suite is 35 checks across five modes.
+The suite is 108 checks across seven modes. `MAM_USER_DATA=<dir>` points any command at an isolated
+profile.
 
-`MAM_USER_DATA=<dir>` points any command at an isolated profile.
-
-Releases are cut by pushing a `v*` tag: GitHub Actions builds the NSIS installer, uploads it with the
-update feed, and publishes the release.
+Releases are cut by pushing a `v*` tag: GitHub Actions checks the tag against `package.json`, builds
+the NSIS installer, publishes the GitHub release with the update feed, and publishes the npm package
+through npm trusted publishing (OIDC, with a provenance attestation — no tokens involved).
 
 ## Licence
 

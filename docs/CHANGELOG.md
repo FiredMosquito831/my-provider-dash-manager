@@ -2,6 +2,13 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.6.2 — 2026-09-07
+
+### Changed
+- README rewritten: install and the three ways to update up front, the CLI table, a walkthrough,
+  the full feature list and services table, two current screenshots. Stale screenshots of the old
+  layout removed.
+
 ## 0.6.1 — 2026-09-07
 
 ### Added
