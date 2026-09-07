@@ -2,6 +2,17 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.2.8 — 2026-09-07
+
+### Fixed
+- **Corrected the documented memory cost.** The README and DESIGN quoted 350–375 MB per live dashboard,
+  which came from the over-reporting working-set metric. Re-measured with private memory: **~125 MB per
+  live dashboard** on a ~370 MB baseline (5 tabs ≈ 1.0 GB, 10 ≈ 1.6 GB, all slept ≈ 0.35 GB).
+
+### Changed
+- README: install via `npx my-provider-dash-manager`, plus the `--print-paths` and `--open` flags in the
+  development commands.
+
 ## 0.2.7 — 2026-09-07
 
 ### Changed

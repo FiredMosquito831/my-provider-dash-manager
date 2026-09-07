@@ -98,7 +98,25 @@ Electron-vs-WebView2 is recorded below. Remaining work lives in `docs/BACKLOG.md
 are per-account content settings, direct Firefox password import, and code signing.
 
 
-## Memory spike results (Sept 7, 2026 — Electron 43, Windows 11, 64 GB RAM, login pages of all 7 services)
+## Memory spike results
+
+**Note on the metric.** The first spike summed each process's *working set*, which counts Chromium's
+shared pages once per process and over-reports by roughly 1.7× (verified against Windows: 1,388 MB
+working set vs 803 MB private for the same 10 processes). The app and these figures now use **private
+memory**, which is what Task Manager shows.
+
+### Corrected measurements (private memory, Sept 7 2026)
+
+| Live tabs | Private | Working set (for reference) |
+|---|---|---|
+| 5 | 993 MB | 1,952 MB |
+| 10 | 1,613 MB | 3,764 MB |
+| all slept (after 10) | 339 MB | 564 MB |
+
+Marginal cost ≈ **125 MB per live dashboard**, on a ~370 MB shell baseline. Sleeping returns the app to
+that baseline, which is what makes the warm-tab limit effective.
+
+### Original working-set run (Sept 7, 2026 — Electron 43, Windows 11, 64 GB RAM, login pages of all 7 services)
 
 | Live tabs | All visible | One visible | Hibernated |
 |---|---|---|---|

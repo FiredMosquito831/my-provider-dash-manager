@@ -1,6 +1,6 @@
 {
   "name": "my-provider-dash-manager",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Manage many accounts per cloud service (Vercel, Netlify, Supabase, Cloudflare, Railway, Render, GitHub) in one desktop app \u2014 isolated persistent sessions, one tab per account.",
   "main": "src/main.js",
   "scripts": {

@@ -5,7 +5,8 @@ Cloudflare, Railway, Render and GitHub accounts signed in at the same time, each
 session, and switch between them instantly — the way a browser handles tabs, but built around
 *accounts* instead of pages.
 
-<sub>Windows desktop app · Electron 43 · local-first · no telemetry, no account, no server</sub>
+<sub>Windows desktop app · Electron 43 · local-first · no telemetry, no account, no server ·
+source-available licence: free for personal and commercial use</sub>
 
 ---
 
@@ -29,13 +30,13 @@ panel lets you store a GitHub token, encrypted with Windows DPAPI, so the feed s
 
 ### Install from the command line
 
-If you have the repository checked out, this pulls the newest release and runs its installer:
-
 ```bash
-npm run install:latest                    # download + launch the installer
-npm run install:latest -- --silent        # install without the wizard
-npm run install:latest -- --download-only # just fetch the .exe
+npx my-provider-dash-manager                    # fetch the newest release and run its installer
+npx my-provider-dash-manager -- --silent        # install without the wizard
+npx my-provider-dash-manager -- --download-only # just fetch the .exe
 ```
+
+From a checkout of this repository, the same thing is `npm run install:latest`.
 
 It prints the latest version and its release notes and verifies the download really is a Windows
 executable before running it. No authentication is needed; a `GH_TOKEN` is used only if present.
@@ -101,9 +102,10 @@ sessions, one place.
 - **Sessions persist across restarts.** Sign in once; you stay signed in (verified by an automated
   restart test that counts real cookies after relaunch).
 - **Instant switching.** Active tabs stay warm, so switching is a visibility toggle, not a reload.
-- **Warm-tab limit with sleeping.** Live dashboards cost roughly 350–375 MB each, so the app keeps a
-  configurable number warm (default 5) and sleeps the rest. Slept tabs stay in the strip and resume
-  on click.
+- **Warm-tab limit with sleeping.** Each live dashboard costs roughly 125 MB, so the app keeps a
+  configurable number warm (default 5) and sleeps the rest. Slept tabs stay in the strip and resume on
+  click, and sleeping returns the app to about 350 MB. Measured: 5 tabs ≈ 1.0 GB, 10 ≈ 1.6 GB, all
+  slept ≈ 0.35 GB (private memory, the figure Task Manager reports).
 - **Tab session memory.** The set of open tabs is saved and restored on the next launch: recent ones
   come back warm, the rest asleep, and you land on the Home grid.
 - **Per-account proxy** (optional) with proper connection flushing.
@@ -204,6 +206,8 @@ npm run capture      # screenshot the running shell
 npm run spike        # memory benchmark
 npm run dist         # build the Windows installer
 npm run install:latest # fetch and run the latest released installer
+npm start -- --print-paths   # show the app name, version and data folder
+npm start -- --open vercel::personal  # open an account on launch
 ```
 
 The suite is 35 checks across five modes.
