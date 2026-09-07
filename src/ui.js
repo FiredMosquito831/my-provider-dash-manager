@@ -29,6 +29,8 @@ const ICONS = {
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   layers: '<path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 17 9 5 9-5"/><path d="m3 12 9 5 9-5"/>',
   refresh: '<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>',
+  shield: '<path d="M12 3l8 3v6c0 4.6-3.2 8.4-8 9-4.8-.6-8-4.4-8-9V6l8-3Z"/>',
+  contrast: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18Z" fill="currentColor" stroke="none"/>',
 };
 function icon(n) { return `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`; }
 
@@ -218,11 +220,15 @@ function renderHome() {
   if (state.activeKey !== null) { $home.hidden = true; return; }
   $home.hidden = false;
   if (document.activeElement && document.activeElement.id === 'warm-limit') return; // don't clobber mid-edit
+  const st = state.settings || {};
   $home.innerHTML = `
     <h2>Accounts</h2>
     <div class="sub">
       <span>Warm-tab limit: <input type="number" id="warm-limit" min="1" max="15" value="${state.warmLimit}"></span>
       <button class="ctlbtn" id="refresh-status" title="Re-fetch API status for all connected accounts">${icon('refresh')} Refresh status</button>
+      <button class="ctlbtn ${st.adBlock ? 'on' : ''}" id="t-adBlock" title="Block ads and trackers in account tabs (uBlock-style, built in)">${icon('shield')} Ad-block${state.blocked ? ` · ${state.blocked}` : ''}</button>
+      <button class="ctlbtn ${st.darkMode ? 'on' : ''}" id="t-darkMode" title="Ask sites for their own dark theme (prefers-color-scheme)">${icon('moon')} Dark sites</button>
+      <button class="ctlbtn ${st.forceDark ? 'on' : ''}" id="t-forceDark" title="Force dark on sites with no dark theme (Dark Reader-style inversion)">${icon('contrast')} Force dark</button>
       <span>· click a card to open its dashboard — sessions persist per account</span>
     </div>
     ${services.map(svc => {
@@ -278,6 +284,14 @@ $home.addEventListener('change', async e => {
 $home.addEventListener('click', async e => {
   const refresh = e.target.closest('#refresh-status');
   if (refresh) { refresh.disabled = true; await window.api.refreshAllStatus().catch(() => {}); refresh.disabled = false; return; }
+  const toggle = e.target.closest('[id^="t-"]');
+  if (toggle) {
+    const name = toggle.id.slice(2);
+    const cur = (state.settings || {})[name];
+    state.settings = Object.assign({}, state.settings, { [name]: await window.api.setContentSetting(name, !cur) });
+    renderHome();
+    return;
+  }
   const gear = e.target.closest('[data-gear]');
   if (gear) { e.stopPropagation(); openEditModal(gear.getAttribute('data-gear')); return; }
   const add = e.target.closest('[data-add2]');

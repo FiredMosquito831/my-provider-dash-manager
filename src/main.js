@@ -4,6 +4,7 @@ const fs = require('fs');
 const SERVICES = require('./services');
 const tokens = require('./api-tokens');
 const { PROVIDERS } = require('./providers');
+const content = require('./content');
 
 const statusCache = new Map(); // accountKey -> { summary?, error?, fetchedAt } — summaries only, tokens never leave main
 
@@ -28,7 +29,7 @@ function writeJson(file, data) {
 
 const store = {
   accounts: [], // {svc, id, label, colorIdx, proxy, createdAt, lastState}
-  settings: { warmLimit: 5, groupTabs: false, collapsed: [] },
+  settings: { warmLimit: 5, groupTabs: false, collapsed: [], adBlock: true, darkMode: true, forceDark: false },
   openTabs: [], // session memory: [{svc, id, url, lastActivated, active}] — survives restarts
   save() {
     writeJson(userDataPath('accounts.json'), this.accounts);
@@ -37,7 +38,7 @@ const store = {
   saveSession() { writeJson(userDataPath('session.json'), this.openTabs); },
   load() {
     this.accounts = readJson(userDataPath('accounts.json'), []);
-    this.settings = Object.assign({ warmLimit: 5, groupTabs: false, collapsed: [] }, readJson(userDataPath('settings.json'), {}));
+    this.settings = Object.assign({ warmLimit: 5, groupTabs: false, collapsed: [], adBlock: true, darkMode: true, forceDark: false }, readJson(userDataPath('settings.json'), {}));
     this.openTabs = readJson(userDataPath('session.json'), []);
   },
 };
@@ -150,6 +151,7 @@ class ViewManager {
       ses.setPermissionRequestHandler((_wc, permission, cb) => cb(ALLOWED.has(permission)));
       ses.setPermissionCheckHandler((_wc, permission, _origin) => ALLOWED.has(permission));
     }
+    content.attachAdBlock(ses, () => !!store.settings.adBlock); // network-level ad/tracker blocking per partition
     if (acc && acc.proxy) this.applyProxy(view.webContents.session, acc.proxy);
     return view;
   }
@@ -179,6 +181,9 @@ class ViewManager {
     if (show) this.activate(key);
     view.webContents.loadURL(tab.url).catch(err => console.error(`load failed ${key}:`, err.message));
     view.webContents.on('page-title-updated', (_e, title) => { tab.title = title; this.emitState(); });
+    view.webContents.on('did-finish-load', () => {
+      content.applyToPage(view.webContents, { adBlock: !!store.settings.adBlock, forceDark: !!store.settings.forceDark });
+    });
     const onNav = (_e, url2) => {
       tab.url = url2;
       // conservative sign-in heuristic: sitting on the service's login page means not signed in
@@ -325,6 +330,8 @@ class ViewManager {
       })), // live registry projection for the home grid (token presence + status summaries; never raw tokens)
       groupTabs: !!store.settings.groupTabs,
       collapsed: store.settings.collapsed || [],
+      settings: { ...store.settings },
+      blocked: content.stats.blocked,
       // the strip shows the whole remembered open set: live tabs AND slept ones (resume on click)
       tabs: this.session.map(s => {
         const k = accountKey(s.svc, s.id);
@@ -528,6 +535,8 @@ function runInteractive(captureMode = false) {
   });
   const vm = new ViewManager();
   vm.attach(win);
+  content.setNativeDark(!!store.settings.darkMode); // sites with their own dark theme follow it
+  content.loadFilters().then(src => console.log(`[adblock] filters from ${src}: ${content.filters.hosts.size} hosts, ${content.filters.cosmetic.length} cosmetic`));
   win.loadFile(path.join(__dirname, 'ui.html'));
   // auto-update (packaged builds only; releases are published by the GitHub Actions tag workflow)
   if (app.isPackaged) {
@@ -663,6 +672,25 @@ function runInteractive(captureMode = false) {
     return true;
   });
   ipcMain.handle('close-tab', (_e, key) => vm.closeTab(key));
+  ipcMain.handle('set-content-setting', (_e, name, value) => {
+    if (!['adBlock', 'darkMode', 'forceDark'].includes(name)) throw new Error(`unknown setting: ${name}`);
+    store.settings[name] = !!value;
+    store.save();
+    if (name === 'darkMode') content.setNativeDark(store.settings.darkMode);
+    // re-apply to every live tab so the change is visible immediately
+    for (const t of vm.tabs.values()) {
+      if (name === 'forceDark' && !value) t.view.webContents.reload();
+      else content.applyToPage(t.view.webContents, { adBlock: !!store.settings.adBlock, forceDark: !!store.settings.forceDark });
+    }
+    vm.emitState();
+    return store.settings[name];
+  });
+  ipcMain.handle('content-stats', () => ({
+    blocked: content.stats.blocked,
+    listSource: content.filters.loadedFrom,
+    hosts: content.filters.hosts.size,
+    cosmetic: content.filters.cosmetic.length,
+  }));
   ipcMain.handle('set-group-tabs', (_e, on) => {
     store.settings.groupTabs = !!on;
     store.save();

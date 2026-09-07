@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('api', {
   closeTab: key => ipcRenderer.invoke('close-tab', key),
   setGroupTabs: on => ipcRenderer.invoke('set-group-tabs', on),
   toggleCollapsed: svc => ipcRenderer.invoke('toggle-collapsed', svc),
+  setContentSetting: (name, value) => ipcRenderer.invoke('set-content-setting', name, value),
+  contentStats: () => ipcRenderer.invoke('content-stats'),
   updateAccount: (svc, id, patch) => ipcRenderer.invoke('update-account', svc, id, patch),
   deleteAccount: (svc, id) => ipcRenderer.invoke('delete-account', svc, id),
   memory: () => ipcRenderer.invoke('memory'),
