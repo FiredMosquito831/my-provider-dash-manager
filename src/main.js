@@ -431,14 +431,28 @@ class ViewManager {
   }
 
   snapshotMemory() {
+    // Summing workingSetSize over-reports badly: Chromium maps shared pages (the framework binary and
+    // friends) into every process, so they are counted once per process — with 10 processes that read
+    // 1,388 MB while Windows/Task Manager reported 803 MB private. privateBytes is the number that
+    // matches Task Manager, so it is what the UI shows; the working-set total is kept for reference.
     const metrics = app.getAppMetrics();
-    let totalWS = 0; const byType = {};
+    let totalWS = 0; let totalPrivate = 0; const byType = {};
     for (const m of metrics) {
-      const ws = (m.memory && m.memory.workingSetSize) || 0;
-      totalWS += ws;
+      totalWS += (m.memory && m.memory.workingSetSize) || 0;
+      totalPrivate += (m.memory && m.memory.privateBytes) || 0;
       byType[m.type] = (byType[m.type] || 0) + 1;
     }
-    return { totalWorkingSetKB: totalWS, totalMB: Math.round(totalWS / 1024), processes: byType, liveTabs: this.tabs.size };
+    const privateMB = Math.round(totalPrivate / 1024);
+    const workingSetMB = Math.round(totalWS / 1024);
+    return {
+      totalWorkingSetKB: totalWS,
+      workingSetMB,
+      privateMB,
+      totalMB: privateMB || workingSetMB, // privateBytes is Windows-only; fall back elsewhere
+      processes: byType,
+      processCount: metrics.length,
+      liveTabs: this.tabs.size,
+    };
   }
 }
 

@@ -676,6 +676,10 @@ async function pollMemory() {
   try {
     const m = await window.api.memory();
     $mem.textContent = `${m.totalMB} MB · ${m.liveTabs} live`;
+    // working set counts Chromium's shared pages once per process, so it reads far higher than
+    // Task Manager; the headline number is private memory, which matches.
+    $mem.title = `${m.totalMB} MB private across ${m.processCount} processes (matches Task Manager)`
+      + (m.workingSetMB ? ` · ${m.workingSetMB} MB working set incl. shared pages` : '');
   } catch {}
 }
 setInterval(pollMemory, 2000);
