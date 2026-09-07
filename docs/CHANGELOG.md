@@ -2,6 +2,12 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.3.1 — 2026-09-07
+
+### Changed
+- Releases now publish the npm package automatically: the `NPM_TOKEN` secret is configured, so a
+  single `v*` tag ships the GitHub release **and** the npm package with no manual step.
+
 ## 0.3.0 — 2026-09-07
 
 ### Added
