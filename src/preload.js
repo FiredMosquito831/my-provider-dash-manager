@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld('api', {
   memory: () => ipcRenderer.invoke('memory'),
   openExternal: url => ipcRenderer.invoke('open-external', url),
   activeTabUrl: () => ipcRenderer.invoke('active-tab-url'),
+  nav: (action, url) => ipcRenderer.invoke('nav', action, url),
+  onFocusAddress: cb => ipcRenderer.on('focus-address', () => cb()),
   setAccountToken: (svc, id, plain) => ipcRenderer.invoke('set-account-token', svc, id, plain),
   clearAccountToken: (svc, id) => ipcRenderer.invoke('clear-account-token', svc, id),
   refreshAllStatus: () => ipcRenderer.invoke('refresh-all-status'),

@@ -72,6 +72,11 @@ Each provider lists its accounts; hovering one reveals open / sleep / close / fi
 
 ![A dashboard open in the app](docs/screenshots/dashboard.png)
 
+Browser controls appear in the strip while a tab is open: back, forward, reload, dashboard, and an
+address bar that navigates inside that account's own session.
+
+![Navigation bar with a Gmail sign-in open](docs/screenshots/navigation.png)
+
 **The top bar is only your open tabs** — filter them, or group them by provider with collapsible sections.
 Slept tabs stay in the strip (dimmed) and resume on click.
 
@@ -126,7 +131,10 @@ sessions, one place.
   hover actions: open, sleep, close, fill login, connect an API token, manage. Collapse any provider.
 - **Top bar — open tabs only.** A filter box and a group-by-provider toggle with collapsible groups.
 - **Home** is always one click (or `Esc`) away: a grid of every service and account with live status.
-- Keyboard: `Ctrl+W` sleep, `Ctrl+Shift+W` sleep all, `Ctrl+Tab` cycle, `Ctrl+1…9` jump.
+- **Browser controls** while a tab is open: back, forward, reload/stop, back-to-dashboard, and an
+  editable address bar that navigates inside that account's own session (http/https only).
+- Keyboard: `Ctrl+W` sleep, `Ctrl+Shift+W` sleep all, `Ctrl+Tab` cycle, `Ctrl+1…9` jump,
+  `Alt+Left`/`Alt+Right` back/forward, `Ctrl+R`/`F5` reload, `Alt+Home` dashboard, `Ctrl+L` address.
 
 ### Saved logins
 - **Remembers logins you type** inside an account tab, bound to *that* account, so two accounts on the

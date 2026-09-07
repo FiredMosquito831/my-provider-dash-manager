@@ -2,6 +2,20 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.6.0 — 2026-09-07
+
+### Added
+- **Browser controls for the open tab.** Back, Forward, Reload/Stop, a "back to dashboard" button and
+  an editable address bar sit in the top strip whenever a tab is active. Type an address and press
+  Enter to go there inside that account's own session (http/https only; a bare `example.com` becomes
+  https). Shortcuts: `Alt+Left` / `Alt+Right`, `Ctrl+R` or `F5`, `Alt+Home` for the dashboard,
+  `Ctrl+L` to focus the address bar. `Esc` inside the address bar restores it instead of going Home.
+- Eight navigation checks in `npm run smoke` (scheme rejection, address navigation, back, dashboard).
+
+### Changed
+- The View menu's Reload entries, which only ever reloaded the app chrome, are replaced by the
+  Navigate menu that acts on the active account tab.
+
 ## 0.5.0 — 2026-09-07
 
 ### Added

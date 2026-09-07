@@ -21,6 +21,10 @@ const $railFoot = document.getElementById('railfoot');
 const ICONS = {
   home: '<path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.5Z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  arrowLeft: '<path d="M19 12H5m7-7-7 7 7 7"/>',
+  arrowRight: '<path d="M5 12h14m-7-7 7 7-7 7"/>',
+  stop: '<path d="M6 6h12v12H6z"/>',
+  dashboard: '<path d="M4 5h16v14H4zM4 10h16M9 10v9"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>',
@@ -96,8 +100,39 @@ function tabHtml(t) {
   </div>`;
 }
 
+// ============ browser-style navigation for the active tab ============
+const $nav = document.getElementById('nav');
+const $addr = document.getElementById('addr');
+function renderNav() {
+  const t = state.activeKey !== null ? state.tabs.find(x => x.key === state.activeKey) : null;
+  $nav.hidden = !t;
+  if (!t) return;
+  document.getElementById('nav-back').disabled = !t.canGoBack;
+  document.getElementById('nav-fwd').disabled = !t.canGoForward;
+  const reload = document.getElementById('nav-reload');
+  reload.innerHTML = icon(t.loading ? 'stop' : 'refresh');
+  reload.title = t.loading ? 'Stop loading' : 'Reload (Ctrl+R / F5)';
+  reload.dataset.action = t.loading ? 'stop' : 'reload';
+  $addr.classList.toggle('loading', !!t.loading);
+  if (document.activeElement !== $addr) $addr.value = t.url || ''; // never clobber what the user is typing
+}
+document.getElementById('nav-back').innerHTML = icon('arrowLeft');
+document.getElementById('nav-fwd').innerHTML = icon('arrowRight');
+document.getElementById('nav-dash').innerHTML = icon('dashboard');
+document.getElementById('nav-back').onclick = () => window.api.nav('back');
+document.getElementById('nav-fwd').onclick = () => window.api.nav('forward');
+document.getElementById('nav-dash').onclick = () => window.api.nav('dashboard');
+document.getElementById('nav-reload').onclick = e => window.api.nav(e.currentTarget.dataset.action || 'reload');
+$addr.addEventListener('focus', () => $addr.select());
+$addr.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); window.api.nav('navigate', $addr.value); $addr.blur(); }
+  else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); renderNav(); $addr.blur(); } // restore, do NOT go Home
+});
+window.api.onFocusAddress(() => { if (!$nav.hidden) { $addr.focus(); $addr.select(); } });
+
 function renderTabs() {
   $extBtn.hidden = state.activeKey === null; // only meaningful while a dashboard is open
+  renderNav();
   const tabs = state.tabs.filter(tabMatchesFilter);
   if (!tabs.length) {
     $tabs.innerHTML = `<span style="color:var(--muted);font-size:12px;padding-left:4px">${

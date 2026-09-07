@@ -37,6 +37,16 @@
     .filterwrap svg { position:absolute; left:7px; color:var(--muted); pointer-events:none; }
 
     #tabs { display:flex; align-items:center; gap:var(--s1); flex:1 1 0; min-width:0; overflow-x:auto; overflow-y:hidden; height:100%; }
+    #nav { display:flex; align-items:center; gap:4px; flex:0 1 auto; min-width:0; }
+    #nav[hidden] { display:none; }
+    .navbtn { padding:0 6px; }
+    .navbtn:disabled { opacity:.35; cursor:default; }
+    .navbtn:disabled:hover { background:var(--panel2); color:var(--muted); }
+    #addr { height:30px; width:300px; min-width:140px; max-width:40vw; padding:0 9px; border:1px solid var(--border); border-radius:7px;
+            background:var(--panel2); color:var(--text); font:inherit; font-size:12px; text-overflow:ellipsis; transition:border-color .18s; }
+    #addr:focus { border-color:var(--accent); outline:none; }
+    #addr.loading { border-color:var(--accent); background:linear-gradient(90deg, var(--panel3) 0 30%, var(--panel2) 60% 100%) 0 0/200% 100%; animation:addrload 1.2s linear infinite; }
+    @keyframes addrload { from { background-position:200% 0; } to { background-position:0 0; } }
     #tabs::-webkit-scrollbar { height:0; }
     .tabgroup { display:flex; align-items:center; gap:var(--s1); padding-left:var(--s2); flex:none;
                 border-left:1px solid var(--border); height:30px; }
@@ -163,6 +173,13 @@
   <div id="strip">
     <div id="tabctl"></div>
     <div id="tabs"></div>
+    <div id="nav" hidden>
+      <button class="ctlbtn navbtn" id="nav-back" title="Back (Alt+Left)" aria-label="Back"></button>
+      <button class="ctlbtn navbtn" id="nav-fwd" title="Forward (Alt+Right)" aria-label="Forward"></button>
+      <button class="ctlbtn navbtn" id="nav-reload" title="Reload (Ctrl+R / F5)" aria-label="Reload"></button>
+      <button class="ctlbtn navbtn" id="nav-dash" title="Back to this account's dashboard (Alt+Home)" aria-label="Dashboard"></button>
+      <input id="addr" type="text" spellcheck="false" autocomplete="off" placeholder="Address (Ctrl+L)" title="Current page — type an address and press Enter to go there inside this account's session" />
+    </div>
     <div id="right">
       <span id="mem">–</span>
       <button class="ctlbtn" id="ext-btn" title="Open the active tab in your system browser" hidden></button>

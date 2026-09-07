@@ -282,6 +282,8 @@ class ViewManager {
     };
     view.webContents.on('did-navigate', onNav);
     view.webContents.on('did-navigate-in-page', onNav); // dashboards route client-side (pushState) — must track too
+    view.webContents.on('did-start-loading', () => this.emitState());
+    view.webContents.on('did-stop-loading', () => this.emitState());
     view.webContents.on('render-process-gone', () => {
       console.error(`renderer gone: ${key}`);
       this.hibernate(key); // drop the dead view; partition survives, reopening rehydrates
@@ -439,10 +441,41 @@ class ViewManager {
           key: k, svc: s.svc, id: s.id, label: a.label || s.id, colorIdx: a.colorIdx || 0,
           title: t ? t.title : '', url: t ? t.url : s.url,
           live: !!t, visible: t ? t.visible : false,
+          canGoBack: !!(t && !t.view.webContents.isDestroyed() && t.view.webContents.navigationHistory.canGoBack()),
+          canGoForward: !!(t && !t.view.webContents.isDestroyed() && t.view.webContents.navigationHistory.canGoForward()),
+          loading: !!(t && !t.view.webContents.isDestroyed() && t.view.webContents.isLoading()),
           lastState: t ? t.lastState : (a.lastState || 'unknown'),
         };
       }),
     });
+  }
+
+  // Browser-style navigation for the ACTIVE tab. `navigate` accepts http(s) only — the address bar
+  // must never become a way to launch other schemes from the chrome.
+  nav(action, url) {
+    const t = this.tabs.get(this.activeKey);
+    if (!t || t.view.webContents.isDestroyed()) return false;
+    const wc = t.view.webContents;
+    switch (action) {
+      case 'back': if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack(); break;
+      case 'forward': if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward(); break;
+      case 'reload': wc.reload(); break;
+      case 'stop': wc.stop(); break;
+      case 'dashboard': { const svc = serviceByKey(t.svc); if (svc) wc.loadURL(svc.dashboardUrl).catch(() => {}); break; }
+      case 'navigate': {
+        let target = String(url || '').trim();
+        if (!target) return false;
+        if (!/^[a-z][a-z0-9+.-]*:/i.test(target)) target = `https://${target}`; // "example.com/path" → https
+        let parsed;
+        try { parsed = new URL(target); } catch { return false; }
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+        wc.loadURL(parsed.href).catch(err => console.error(`navigate failed ${this.activeKey}:`, err.message));
+        break;
+      }
+      default: return false;
+    }
+    this.emitState();
+    return true;
   }
 
   snapshotMemory() {
@@ -574,6 +607,25 @@ async function runSmoke() {
   check('accounts-json-written', accountsFile, userDataPath('accounts.json'));
   const mem = vm.snapshotMemory();
   check('live-tabs', mem.liveTabs === 3, `${mem.totalMB}MB`);
+
+  // browser-style navigation on the active tab (address bar, back, dashboard) — http(s) only
+  const key = accountKey('netlify', 'a1');
+  vm.activate(key);
+  const urlOf = () => vm.tabs.get(key).view.webContents.getURL();
+  const waitFor = async (pred, ms = 15000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (pred()) return true; await sleep(250); } return pred(); };
+  check('nav-rejects-javascript-scheme', vm.nav('navigate', 'javascript:alert(1)') === false && !urlOf().startsWith('javascript:'));
+  check('nav-rejects-file-scheme', vm.nav('navigate', 'file:///C:/Windows') === false && !urlOf().startsWith('file:'));
+  check('nav-rejects-empty', vm.nav('navigate', '   ') === false);
+  vm.nav('navigate', 'example.com'); // bare host → https
+  check('nav-address-goes-there', await waitFor(() => /^https:\/\/example\.com\/?$/.test(urlOf())), urlOf());
+  check('nav-can-go-back', vm.tabs.get(key).view.webContents.navigationHistory.canGoBack());
+  vm.nav('back');
+  check('nav-back-returns', await waitFor(() => /netlify\.com/.test(urlOf())), urlOf());
+  vm.nav('navigate', 'https://example.org/');
+  await waitFor(() => /example\.org/.test(urlOf()));
+  vm.nav('dashboard');
+  check('nav-dashboard-returns-to-service', await waitFor(() => /app\.netlify\.com/.test(urlOf())), urlOf());
+  check('nav-noop-without-active-tab', (() => { const k = vm.activeKey; vm.activeKey = null; const r = vm.nav('reload'); vm.activeKey = k; return r === false; })());
 
   fs.writeFileSync(path.join(__dirname, '..', 'smoke-report.json'), JSON.stringify(results, null, 2));
   app.exit(results.checks.every(c => c.ok) ? 0 : 1);
@@ -938,8 +990,20 @@ function runInteractive(captureMode = false) {
         })),
       ],
     },
+    {
+      label: 'Navigate',
+      submenu: [
+        { label: 'Back', accelerator: 'Alt+Left', click: () => vm.nav('back') },
+        { label: 'Forward', accelerator: 'Alt+Right', click: () => vm.nav('forward') },
+        { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => vm.nav('reload') },
+        { label: 'Reload', accelerator: 'F5', click: () => vm.nav('reload') },
+        { label: 'Dashboard', accelerator: 'Alt+Home', click: () => vm.nav('dashboard') },
+        { type: 'separator' },
+        { label: 'Focus Address Bar', accelerator: 'CmdOrCtrl+L', click: () => { if (win.webContents && !win.webContents.isDestroyed()) win.webContents.send('focus-address'); } },
+      ],
+    },
     { label: 'Edit', submenu: [{ role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
-    { label: 'View', submenu: [{ role: 'reload' }, { role: 'forceReload' }, { type: 'separator' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'zoomReset' }, { type: 'separator' }, { role: 'toggleDevTools' }] },
+    { label: 'View', submenu: [{ role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'zoomReset' }, { type: 'separator' }, { role: 'toggleDevTools' }] },
   ]);
   Menu.setApplicationMenu(menu);
 
@@ -989,6 +1053,7 @@ function runInteractive(captureMode = false) {
     return key;
   });
   ipcMain.handle('activate-tab', (_e, key) => vm.activate(key));
+  ipcMain.handle('nav', (_e, action, url) => vm.nav(String(action || ''), url));
   ipcMain.handle('sleep-tab', (_e, key) => vm.hibernate(key));
   ipcMain.handle('sleep-all', () => vm.hibernateAll());
   ipcMain.handle('update-account', (_e, svc, id, patch) => vm.updateAccount(svc, id, patch || {}));
