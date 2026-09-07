@@ -24,9 +24,8 @@ release notes, and gives you *Check for updates*, *Download*, and *Restart & ins
 download progress. Nothing is downloaded or installed without you pressing the button, and the app
 checks quietly on startup and once an hour after that.
 
-While the repository is **private**, GitHub will not serve the release feed anonymously. Either make
-the repository public, or paste a GitHub token (read access to this repo is enough) into the panel —
-it is stored encrypted with Windows DPAPI and used only for update checks and downloads.
+The repository is public, so updates need no setup. (If you ever fork this into a private repo, the
+panel lets you store a GitHub token, encrypted with Windows DPAPI, so the feed stays readable.)
 
 ### Install from the command line
 
@@ -38,8 +37,8 @@ npm run install:latest -- --silent        # install without the wizard
 npm run install:latest -- --download-only # just fetch the .exe
 ```
 
-It prints the latest version and its release notes, verifies the download really is a Windows
-executable before running it, and uses `GH_TOKEN` or your `gh auth login` session for the private repo.
+It prints the latest version and its release notes and verifies the download really is a Windows
+executable before running it. No authentication is needed; a `GH_TOKEN` is used only if present.
 
 ### Run from source
 
