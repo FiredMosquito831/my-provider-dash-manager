@@ -6,6 +6,7 @@ const tokens = require('./api-tokens');
 const { PROVIDERS } = require('./providers');
 const content = require('./content');
 const creds = require('./credentials');
+const plugins = require('./plugins');
 
 const statusCache = new Map(); // accountKey -> { summary?, error?, fetchedAt } — summaries only, tokens never leave main
 
@@ -48,8 +49,34 @@ const store = {
 };
 function userData(name) { return userDataPath(name); }
 
-// Phase 2: built-in curated services plus user-added generic ones (any URL).
-function allServices() { return [...SERVICES, ...(store.customServices || [])]; }
+// Built-in curated services + user-added generic ones (Phase 2) + plugin manifests (Phase 3).
+let pluginServices = [];
+let pluginErrors = [];
+function reloadPlugins() {
+  const r = plugins.load();
+  pluginServices = r.services;
+  pluginErrors = r.errors;
+  if (pluginErrors.length) console.error('[plugins] invalid manifests:', pluginErrors.map(e => `${e.file}: ${e.error}`).join('; '));
+  return r;
+}
+// Precedence on key collisions: built-in > user-added > plugin. Two services must never share a key,
+// or their accounts would resolve to the same partition namespace.
+function allServices() {
+  const out = []; const seen = new Set();
+  for (const s of [...SERVICES, ...(store.customServices || []), ...pluginServices]) {
+    if (seen.has(s.key)) continue;
+    seen.add(s.key);
+    out.push(s);
+  }
+  return out;
+}
+
+// Status providers: built-ins, plus generic ones synthesised from a plugin's api block.
+function providerFor(svcKey) {
+  if (PROVIDERS[svcKey]) return PROVIDERS[svcKey];
+  const p = pluginServices.find(s => s.key === svcKey);
+  return p && p.api ? plugins.makeProvider(p.api) : null;
+}
 function serviceByKey(key) { return allServices().find(s => s.key === key); }
 
 function sanitizeId(name) {
@@ -637,6 +664,7 @@ function runInteractive(captureMode = false) {
   });
   const vm = new ViewManager();
   vm.attach(win);
+  reloadPlugins(); // Phase 3: service manifests from <userData>/plugins
   content.setNativeDark(!!store.settings.darkMode); // sites with their own dark theme follow it
   content.loadFilters().then(src => console.log(`[adblock] filters from ${src}: ${content.filters.hosts.size} hosts, ${content.filters.cosmetic.length} cosmetic`));
   win.loadFile(path.join(__dirname, 'ui.html'));
@@ -835,6 +863,36 @@ function runInteractive(captureMode = false) {
     const c = creds.forAccount(svc, id, svcCfg && svcCfg.loginUrl);
     return c ? { username: c.username, host: c.host, source: c.source } : null; // never the password
   });
+  // ---------- Phase 3: service plugins (JSON manifests) ----------
+  ipcMain.handle('plugins-list', () => ({
+    dir: plugins.pluginsDir(),
+    services: pluginServices.map(s => ({ key: s.key, name: s.name, sourceFile: s.sourceFile, hasApi: !!s.api })),
+    errors: pluginErrors,
+  }));
+  ipcMain.handle('plugin-install', async () => {
+    const { dialog } = require('electron');
+    const r = await dialog.showOpenDialog({ title: 'Install a service plugin', filters: [{ name: 'Service manifest', extensions: ['json'] }], properties: ['openFile'] });
+    if (r.canceled || !r.filePaths[0]) return null;
+    const svc = plugins.install(r.filePaths[0]);
+    reloadPlugins();
+    vm.emitState();
+    return svc;
+  });
+  ipcMain.handle('plugin-remove', (_e, key) => {
+    if (store.accounts.some(a => a.svc === key)) throw new Error('Delete this service’s accounts first');
+    plugins.remove(key);
+    reloadPlugins();
+    vm.emitState();
+    return true;
+  });
+  ipcMain.handle('plugin-write-example', () => {
+    fs.mkdirSync(plugins.pluginsDir(), { recursive: true });
+    const p = path.join(plugins.pluginsDir(), 'example-flyio.json.txt');
+    fs.writeFileSync(p, JSON.stringify(plugins.EXAMPLE, null, 2));
+    shell.showItemInFolder(p);
+    return p;
+  });
+
   // ---------- Phase 2: user-added generic services (any URL) ----------
   ipcMain.handle('add-service', (_e, { name, url }) => {
     const clean = String(name || '').trim();
@@ -901,7 +959,7 @@ function runInteractive(captureMode = false) {
   // ---------- API-token layer (tokens stay in main; renderer gets summaries only) ----------
   async function refreshAccountStatus(svc, id) {
     const key = accountKey(svc, id);
-    const provider = PROVIDERS[svc];
+    const provider = providerFor(svc);
     const token = await tokens.getToken(key);
     if (!provider || !token) return;
     try {
@@ -917,9 +975,9 @@ function runInteractive(captureMode = false) {
 
   ipcMain.handle('set-account-token', async (_e, svc, id, plain) => {
     const key = accountKey(svc, id);
-    if (!PROVIDERS[svc]) throw new Error(`unknown service: ${svc}`);
+    if (!providerFor(svc)) throw new Error(`unknown service: ${svc}`);
     if (!plain || !plain.trim()) throw new Error('empty token');
-    const provider = PROVIDERS[svc];
+    const provider = providerFor(svc);
     try {
       const { summary } = await provider.validate(plain.trim()); // validate BEFORE storing
       await tokens.setToken(key, plain.trim());

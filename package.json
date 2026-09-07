@@ -1,6 +1,6 @@
 {
   "name": "multi-acc-manager",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Multi-account manager for Vercel/Netlify/Supabase-style dashboards",
   "main": "src/main.js",
   "scripts": {
@@ -41,6 +41,7 @@
       "provider": "github",
       "owner": "FiredMosquito831",
       "repo": "my-provider-dash-manager"
-    }
+    },
+    "artifactName": "My-Provider-Dash-Manager-Setup-${version}.${ext}"
   }
 }

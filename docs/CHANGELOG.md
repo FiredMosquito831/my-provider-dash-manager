@@ -2,6 +2,23 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.2.1 — 2026-09-07
+
+### Added
+- **Phase 3 — service plugins**: JSON manifests in `<userData>/plugins` define a service (URLs, colour,
+  multi-account policy) and can declare an `api` block that powers status cards generically. Install /
+  remove / write-an-example from the UI; invalid manifests are reported, never fatal.
+
+### Fixed
+- **Release pipeline dropped the installer**: electron-builder created the GitHub release twice
+  concurrently, so the .exe upload was lost (v0.2.0 shipped with only a blockmap). The workflow now
+  pre-creates the release, then uploads artifacts explicitly and publishes.
+- Artifact names are now space-free (`My-Provider-Dash-Manager-Setup-<version>.exe`): GitHub rewrites
+  spaces to dots on upload, which desynced the name recorded in `latest.yml` and would have broken
+  auto-update.
+- Service keys are de-duplicated across built-in, user-added and plugin services (first wins), so two
+  services can never share a partition namespace.
+
 ## 0.2.0 — 2026-09-07
 
 ### Added

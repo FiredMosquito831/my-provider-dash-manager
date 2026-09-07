@@ -17,8 +17,23 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+
+      # Pre-create the release so electron-builder never races itself creating it twice
+      # (that race silently dropped the installer upload on v0.2.0 — only the blockmap landed).
+      - name: Ensure draft release exists
+        run: gh release create "$env:GITHUB_REF_NAME" --draft --title "$env:GITHUB_REF_NAME" --notes "See docs/CHANGELOG.md" 2>$null; exit 0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - run: npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # unsigned note: installer is unsigned for now (SmartScreen will warn);
-      # code-signing cert is a tracked backlog item before wide distribution.
+
+      # Belt and braces: upload anything electron-builder missed, then publish.
+      - name: Upload artifacts and publish
+        run: |
+          gh release upload "$env:GITHUB_REF_NAME" (Get-ChildItem dist/*.exe, dist/latest.yml, dist/*.blockmap | ForEach-Object { $_.FullName }) --clobber
+          gh release edit "$env:GITHUB_REF_NAME" --draft=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Installer is unsigned (SmartScreen warns); code signing is tracked in docs/BACKLOG.md.

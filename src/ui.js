@@ -430,6 +430,7 @@ function openAddServiceModal() {
     <input type="text" id="s-url" placeholder="https://fly.io/dashboard" />
     <div id="m-error" style="color:var(--danger);font-size:11px;margin-top:8px"></div>
     <div class="row"><button class="btn-primary" id="s-add">Add service</button><button class="btn-plain" id="m-cancel">Cancel</button></div>
+    <div class="row"><button class="btn-plain" id="s-plugins">Service plugins…</button></div>
     <div class="note">Any web service works — it gets its own row in the rail, and each account you add under it gets a fully isolated, persistent session just like the built-in providers.</div>`;
   $modalBack.hidden = false;
   window.api.setModalOpen(true);
@@ -443,7 +444,51 @@ function openAddServiceModal() {
       box.textContent = String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
     }
   };
+  $modal.querySelector('#s-plugins').onclick = () => openPluginsModal();
   $modal.querySelector('#s-name').focus();
+}
+
+async function openPluginsModal() {
+  $modalBack.hidden = false;
+  window.api.setModalOpen(true);
+  const info = await window.api.pluginsList().catch(() => ({ services: [], errors: [], dir: '' }));
+  $modal.innerHTML = `
+    <h3>Service plugins</h3>
+    ${info.services.length ? info.services.map(p => `
+      <div class="row" style="align-items:center">
+        <span style="flex:1">${esc(p.name)} <span style="color:var(--muted);font-size:11px">${esc(p.key)}${p.hasApi ? ' · API' : ''}</span></span>
+        <button class="btn-plain" data-rmplug="${esc(p.key)}" style="flex:none">Remove</button>
+      </div>`).join('') : '<div class="note">No plugins installed yet.</div>'}
+    ${info.errors && info.errors.length ? `<div style="color:var(--danger);font-size:11px;margin-top:8px">${
+      info.errors.map(e => `${esc(e.file)}: ${esc(e.error)}`).join('<br>')}</div>` : ''}
+    <div id="m-error" style="font-size:11px;margin-top:8px"></div>
+    <div class="row">
+      <button class="btn-primary" id="p-install">Install manifest…</button>
+      <button class="btn-plain" id="p-example">Example</button>
+    </div>
+    <div class="row"><button class="btn-plain" id="m-cancel">Close</button></div>
+    <div class="note">A plugin is a small JSON file describing a service (URLs, colour, policy) and
+      optionally how to read its API for status cards. Drop files in <code>${esc(info.dir || 'plugins')}</code>
+      or install one here. "Example" writes a documented sample next to them.</div>`;
+  $modal.querySelector('#m-cancel').onclick = closeModal;
+  $modal.querySelector('#p-install').onclick = async () => {
+    const box = $modal.querySelector('#m-error');
+    try {
+      const svc = await window.api.pluginInstall();
+      if (svc) { box.style.color = 'var(--ok)'; box.textContent = `Installed ${svc.name}.`; openPluginsModal(); }
+    } catch (err) {
+      box.style.color = 'var(--danger)';
+      box.textContent = String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    }
+  };
+  $modal.querySelector('#p-example').onclick = () => window.api.pluginWriteExample();
+  $modal.querySelectorAll('[data-rmplug]').forEach(b => {
+    b.onclick = async () => {
+      const box = $modal.querySelector('#m-error');
+      try { await window.api.pluginRemove(b.getAttribute('data-rmplug')); openPluginsModal(); }
+      catch (err) { box.style.color = 'var(--danger)'; box.textContent = String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); }
+    };
+  });
 }
 
 function openEditModal(key, focusToken = false) {
