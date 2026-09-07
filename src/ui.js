@@ -48,6 +48,7 @@ function esc(s) {
 }
 function svcOf(key) { return services.find(s => s.key === key) || { key, name: key, color: '#888' }; }
 function isCollapsed(svc) { return (state.collapsed || []).includes(svc); }
+function isStripCollapsed(svc) { return (state.stripCollapsed || []).includes(svc); }
 
 const POLICY_TEXT = {
   ok: '',
@@ -84,6 +85,7 @@ function tabHtml(t) {
 }
 
 function renderTabs() {
+  $extBtn.hidden = state.activeKey === null; // only meaningful while a dashboard is open
   const tabs = state.tabs.filter(tabMatchesFilter);
   if (!tabs.length) {
     $tabs.innerHTML = `<span style="color:var(--muted);font-size:12px;padding-left:4px">${
@@ -95,7 +97,7 @@ function renderTabs() {
   for (const t of tabs) { if (!bySvc.has(t.svc)) bySvc.set(t.svc, []); bySvc.get(t.svc).push(t); }
   $tabs.innerHTML = [...bySvc.entries()].map(([svc, list]) => {
     const s = svcOf(svc);
-    const collapsed = isCollapsed(svc);
+    const collapsed = isStripCollapsed(svc);
     return `<div class="tabgroup">
       <span class="grouplabel" data-collapse="${esc(svc)}" title="${collapsed ? 'Expand' : 'Collapse'} ${esc(s.name)} tabs">
         <span class="dot" style="background:${s.color}"></span>${esc(s.name)} ${list.length}
@@ -118,7 +120,7 @@ $tabs.addEventListener('click', e => {
   const close = e.target.closest('[data-close]');
   if (close) { e.stopPropagation(); window.api.closeTab(close.getAttribute('data-close')); return; }
   const coll = e.target.closest('[data-collapse]');
-  if (coll) { window.api.toggleCollapsed(coll.getAttribute('data-collapse')); return; }
+  if (coll) { window.api.toggleCollapsed(coll.getAttribute('data-collapse'), 'strip'); return; }
   const tabEl = e.target.closest('[data-key]');
   if (tabEl) {
     const key = tabEl.getAttribute('data-key');
@@ -139,7 +141,7 @@ function renderRail() {
     const openCount = state.tabs.filter(t => t.svc === s.key).length;
     return `<div class="prov">
       <div class="provhead ${collapsed ? 'collapsed' : ''}" data-collapse="${esc(s.key)}" title="${collapsed ? 'Expand' : 'Collapse'} ${esc(s.name)}">
-        ${icon('chevron')}
+        <span class="chev">${icon('chevron')}</span>
         <span class="dot" style="background:${s.color}"></span>
         <span class="pname">${esc(s.name)}</span>
         <span class="count">${openCount ? `${openCount}/${accs.length}` : accs.length || ''}</span>
@@ -243,7 +245,8 @@ $extBtn.addEventListener('click', async () => {
 function renderHome() {
   if (state.activeKey !== null) { $home.hidden = true; return; }
   $home.hidden = false;
-  if (document.activeElement && document.activeElement.id === 'warm-limit') return; // don't clobber mid-edit
+  const editing = document.activeElement && document.activeElement.id === 'warm-limit';
+  const keepValue = editing ? document.activeElement.value : null;
   const st = state.settings || {};
   $home.innerHTML = `
     <h2>Accounts</h2>
@@ -271,15 +274,16 @@ function renderHome() {
     }).join('')}
     <div class="svcgroup">
       <div class="head"><span class="name">Saved logins</span>
-        <span class="policy">${credStats ? `${credStats.total} stored · encrypted with Windows DPAPI` : ''}</span></div>
+        <span class="policy">${(state.credCount != null ? state.credCount : (credStats ? credStats.total : 0))} stored · encrypted with Windows DPAPI</span></div>
       <div class="sub" style="margin-bottom:0">
         <button class="ctlbtn ${st.saveLogins ? 'on' : ''}" id="t-saveLogins" title="Remember logins you type in account tabs">${icon('key')} Remember logins</button>
         <button class="ctlbtn ${st.autofill ? 'on' : ''}" id="t-autofill" title="Fill the saved login automatically when a sign-in page appears">${icon('play')} Auto-fill</button>
         <button class="ctlbtn" id="imp-browser" title="Import saved passwords from an installed browser">${icon('download')} Import from browser</button>
         <button class="ctlbtn" id="imp-csv" title="Import a password CSV exported from any browser">${icon('download')} Import CSV</button>
-        ${credStats && credStats.total ? `<button class="ctlbtn" id="imp-clear" title="Delete every stored login">${icon('x')} Clear</button>` : ''}
+        ${(state.credCount || (credStats && credStats.total)) ? `<button class="ctlbtn" id="imp-clear" title="Delete every stored login">${icon('x')} Clear</button>` : ''}
       </div>
     </div>`;
+  restoreHomeFocus(keepValue); // re-renders no longer kick you out of the warm-limit field
 }
 
 function cardHtml(svc, a) {
@@ -307,6 +311,12 @@ function cardHtml(svc, a) {
     </div>
     <div class="meta">${meta}</div>
   </div>`;
+}
+
+function restoreHomeFocus(keepValue) {
+  if (keepValue === null) return;
+  const el = document.getElementById('warm-limit');
+  if (el) { el.value = keepValue; el.focus(); }
 }
 
 $home.addEventListener('change', async e => {
@@ -382,7 +392,7 @@ async function doAdd(svc, mode) {
     closeModal();
   } catch (err) {
     const box = $modal.querySelector('#m-error');
-    if (box) box.textContent = `Failed to add account: ${err.message}`;
+    if (box) box.textContent = `Failed to add account: ${String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`;
   }
 }
 
@@ -585,9 +595,11 @@ window.api.onTabsState(s => {
   services = await window.api.listServices();
   registry = await window.api.registryList();
   const settings = await window.api.getSettings();
+  state.settings = settings || {};
   state.warmLimit = (settings && settings.warmLimit) || 5;
   state.groupTabs = !!(settings && settings.groupTabs);
   state.collapsed = (settings && settings.collapsed) || [];
+  state.stripCollapsed = (settings && settings.stripCollapsed) || [];
   credStats = await window.api.credsStats().catch(() => null);
   renderAll();
   window.api.uiReady(); // triggers session restore in main

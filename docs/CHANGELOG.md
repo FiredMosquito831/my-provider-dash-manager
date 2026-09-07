@@ -2,6 +2,38 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.2.2 — 2026-09-07
+
+Security and correctness release: a 30-agent adversarial review confirmed 22 findings against the
+0.2.x code, four of them critical. All are fixed.
+
+### Security
+- **Saved logins are now origin-bound.** A password typed on any page reached from an account tab
+  (an OAuth hand-off, an outbound link, a look-alike page) could previously be captured and stored as
+  that account's login, then auto-filled into the real service. Capture now refuses credentials from
+  origins outside the service's own domains.
+- **Autofill and manual fill verify the page's live origin** before typing a password, and refuse with
+  a clear message when the tab is on another site.
+- Credential recall also checks host, so a stored login is never returned for an unrelated origin.
+- Six origin-guard regression checks added to `smoke:autofill`.
+
+### Fixed
+- Turning ad-block off now reloads tabs so already-hidden page elements come back.
+- A plugin could shadow a built-in service for API-token validation; provider lookup now follows the
+  same precedence as the service list, and colliding plugin keys are rejected at install.
+- Generic filter rules no longer apply to the dashboards this app manages (substring rules and
+  cosmetic CSS are skipped there), and shared deployment apexes (vercel.app, pages.dev, onrender.com…)
+  can never be blocked as a whole.
+- Warm-tab limit no longer sleeps one tab too many while you are on Home.
+- "Sleep all" no longer cascades through re-activations; session writes are debounced and flushed on quit.
+- Escape returns to Home even when the dashboard page has keyboard focus.
+- The "Open in browser" button was permanently hidden after the rail rework — restored.
+- Rail and tab-strip collapse states are independent; the provider chevron rotates again.
+- Force-dark and native dark are mutually exclusive (they double-darkened).
+- Home no longer freezes its whole re-render while the warm-tab field has focus, the saved-login count
+  updates after passive captures, missing services fail loudly instead of throwing from event handlers,
+  and add-account errors are unwrapped like everywhere else.
+
 ## 0.2.1 — 2026-09-07
 
 ### Added

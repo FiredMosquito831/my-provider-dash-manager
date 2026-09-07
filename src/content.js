@@ -21,6 +21,15 @@ const SEED_HOSTS = [
   'amazon-adsystem.com', 'bidswitch.net', 'yieldmo.com', 'adroll.com', 'ads-twitter.com',
 ];
 
+// Hosts of the services this app manages. Generic EasyList substring rules and cosmetic selectors
+// are NOT applied to them: a false positive there breaks the dashboard the user came for.
+let managedHosts = [];
+function setManagedHosts(hosts) { managedHosts = (hosts || []).filter(Boolean); }
+function isManaged(hostname) {
+  const h = String(hostname || '').toLowerCase();
+  return managedHosts.some(m => h === m || h.endsWith(`.${m}`));
+}
+
 const filters = {
   hosts: new Set(SEED_HOSTS),
   substrings: [],
@@ -97,15 +106,23 @@ async function loadFilters() {
   return filters.loadedFrom;
 }
 
+// Deployment apexes: a list entry for one of these must never take down every user site under them.
+const NEVER_BLOCK_APEX = new Set([
+  'vercel.app', 'netlify.app', 'pages.dev', 'workers.dev', 'onrender.com', 'railway.app',
+  'fly.dev', 'supabase.co', 'supabase.in', 'github.io', 'githubusercontent.com',
+]);
+
 function hostBlocked(hostname) {
   let h = hostname.toLowerCase();
   if (filters.exceptions.has(h)) return false;
+  if (NEVER_BLOCK_APEX.has(h)) return false;
   // match the host and every parent domain (ads.foo.example.com -> example.com)
   for (;;) {
     if (filters.hosts.has(h)) return true;
     const dot = h.indexOf('.');
     if (dot === -1) return false;
     h = h.slice(dot + 1);
+    if (NEVER_BLOCK_APEX.has(h)) return false; // stop before matching a shared deployment apex
     if (!h.includes('.')) return false;
   }
 }
@@ -115,7 +132,9 @@ function shouldBlock(url, resourceType) {
   try {
     const u = new URL(url);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    if (isManaged(u.hostname)) return false; // never block a managed dashboard's own requests
     if (hostBlocked(u.hostname)) return true;
+    // Substring rules are broad and can match legitimate API paths, so they only apply off-site.
     const lower = url.toLowerCase();
     for (const s of filters.substrings) if (lower.includes(s)) return true;
     return false;
@@ -151,7 +170,11 @@ img,video,iframe,svg,canvas,picture,[style*="background-image"]{filter:invert(1)
 
 async function applyToPage(wc, { adBlock, forceDark }) {
   try {
-    if (adBlock) { const css = cosmeticCss(); if (css) await wc.insertCSS(css); }
+    let host = '';
+    try { host = new URL(wc.getURL()).hostname; } catch {}
+    // Generic cosmetic selectors are written for ad slots on content sites; on a dashboard they can
+    // hide real UI, so skip them on the services this app manages.
+    if (adBlock && !isManaged(host)) { const css = cosmeticCss(); if (css) await wc.insertCSS(css); }
     if (forceDark) await wc.insertCSS(FORCE_DARK_CSS);
   } catch { /* page may have navigated away */ }
 }
@@ -160,4 +183,4 @@ function setNativeDark(on) {
   nativeTheme.themeSource = on ? 'dark' : 'system'; // makes prefers-color-scheme sites go dark natively
 }
 
-module.exports = { loadFilters, attachAdBlock, applyToPage, setNativeDark, stats, filters };
+module.exports = { loadFilters, attachAdBlock, applyToPage, setNativeDark, setManagedHosts, isManaged, stats, filters };

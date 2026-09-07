@@ -267,15 +267,22 @@ function rememberForAccount(svc, id, { url, username, password }) {
   return { saved: true };
 }
 
-// Prefer the login captured for THIS account; fall back to an imported one matching the site host.
+function hostRelated(a, b) {
+  if (!a || !b) return false;
+  return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
+}
+
+// Prefer the login captured for THIS account, but only when it belongs to the site being asked about
+// — a credential must never be handed to an origin unrelated to the one it was saved on. Falls back
+// to an imported credential for the same host.
 function forAccount(svc, id, hostHint) {
   const list = loadAll();
   const accountKey = `${svc}::${id}`;
-  const own = list.find(c => c.accountKey === accountKey);
-  if (own) return own;
   const host = hostOf(hostHint || '');
+  const own = list.find(c => c.accountKey === accountKey);
+  if (own && (!host || !own.host || hostRelated(own.host, host))) return own;
   if (!host) return null;
-  return list.find(c => c.host && (c.host === host || host.endsWith(`.${c.host}`) || c.host.endsWith(`.${host}`))) || null;
+  return list.find(c => hostRelated(c.host, host)) || null;
 }
 
 function stats() {
@@ -290,5 +297,5 @@ function clearAll() { try { fs.rmSync(credsFile(), { force: true }); } catch {} 
 module.exports = {
   listChromiumProfiles, importFromChromium, importFromCsv,
   matchesFor, fillInto, stats, clearAll, loadAll,
-  rememberForAccount, forAccount,
+  rememberForAccount, forAccount, hostOf, hostRelated,
 };

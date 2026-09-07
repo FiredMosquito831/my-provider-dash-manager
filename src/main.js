@@ -31,7 +31,7 @@ function writeJson(file, data) {
 
 const store = {
   accounts: [], // {svc, id, label, colorIdx, proxy, createdAt, lastState}
-  settings: { warmLimit: 5, groupTabs: false, collapsed: [], adBlock: true, darkMode: true, forceDark: false, saveLogins: true, autofill: true },
+  settings: { warmLimit: 5, groupTabs: false, collapsed: [], stripCollapsed: [], adBlock: true, darkMode: true, forceDark: false, saveLogins: true, autofill: true },
   openTabs: [], // session memory: [{svc, id, url, lastActivated, active}] — survives restarts
   customServices: [], // Phase 2: user-added services {key,name,dashboardUrl,loginUrl,color,custom:true}
   save() {
@@ -42,7 +42,7 @@ const store = {
   saveSession() { writeJson(userDataPath('session.json'), this.openTabs); },
   load() {
     this.accounts = readJson(userDataPath('accounts.json'), []);
-    this.settings = Object.assign({ warmLimit: 5, groupTabs: false, collapsed: [], adBlock: true, darkMode: true, forceDark: false, saveLogins: true, autofill: true }, readJson(userDataPath('settings.json'), {}));
+    this.settings = Object.assign({ warmLimit: 5, groupTabs: false, collapsed: [], stripCollapsed: [], adBlock: true, darkMode: true, forceDark: false, saveLogins: true, autofill: true }, readJson(userDataPath('settings.json'), {}));
     this.openTabs = readJson(userDataPath('session.json'), []);
     this.customServices = readJson(userDataPath('services.json'), []);
   },
@@ -52,11 +52,17 @@ function userData(name) { return userDataPath(name); }
 // Built-in curated services + user-added generic ones (Phase 2) + plugin manifests (Phase 3).
 let pluginServices = [];
 let pluginErrors = [];
+function refreshManagedHosts() {
+  const hosts = new Set();
+  for (const s of allServices()) for (const h of serviceHosts(s.key)) hosts.add(h);
+  content.setManagedHosts([...hosts]);
+}
 function reloadPlugins() {
   const r = plugins.load();
   pluginServices = r.services;
   pluginErrors = r.errors;
   if (pluginErrors.length) console.error('[plugins] invalid manifests:', pluginErrors.map(e => `${e.file}: ${e.error}`).join('; '));
+  refreshManagedHosts();
   return r;
 }
 // Precedence on key collisions: built-in > user-added > plugin. Two services must never share a key,
@@ -74,8 +80,8 @@ function allServices() {
 // Status providers: built-ins, plus generic ones synthesised from a plugin's api block.
 function providerFor(svcKey) {
   if (PROVIDERS[svcKey]) return PROVIDERS[svcKey];
-  const p = pluginServices.find(s => s.key === svcKey);
-  return p && p.api ? plugins.makeProvider(p.api) : null;
+  const winner = serviceByKey(svcKey); // same precedence as allServices(): built-in > custom > plugin
+  return winner && winner.plugin && winner.api ? plugins.makeProvider(winner.api) : null;
 }
 function serviceByKey(key) { return allServices().find(s => s.key === key); }
 
@@ -96,6 +102,20 @@ function registerAccount(svc, id, label) {
   return acc;
 }
 function accountKey(svc, id) { return `${svc}::${id}`; }
+
+// ---- credential origin guard ----
+// A tab can navigate anywhere (outbound links, OAuth popups routed into the same partition), so a
+// saved password must only ever be captured from, or filled into, the service's own domains.
+function serviceHosts(svcKey) {
+  const s = serviceByKey(svcKey);
+  if (!s) return [];
+  return [...new Set([s.dashboardUrl, s.loginUrl, s.signupUrl].filter(Boolean).map(u => creds.hostOf(u)).filter(Boolean))];
+}
+function originAllowed(svcKey, url) {
+  const host = creds.hostOf(url || '');
+  if (!host) return false;
+  return serviceHosts(svcKey).some(h => creds.hostRelated(host, h));
+}
 
 // ---------- view manager ----------
 class ViewManager {
@@ -128,13 +148,21 @@ class ViewManager {
 
   persistSession() {
     store.openTabs = this.session.map(s => ({ svc: s.svc, id: s.id, url: s.url, lastActivated: s.lastActivated, active: accountKey(s.svc, s.id) === this.activeKey }));
+    // coalesce bursts (every tab click calls this) into one write off the hot path
+    if (this._persistTimer) clearTimeout(this._persistTimer);
+    this._persistTimer = setTimeout(() => { this._persistTimer = null; store.saveSession(); }, 250);
+  }
+
+  // Write any pending debounced session state immediately (used on quit).
+  flushSession() {
+    if (this._persistTimer) { clearTimeout(this._persistTimer); this._persistTimer = null; }
     store.saveSession();
   }
 
   // Restore the tab set from the previous run: most-recent tabs come back live (bounded by warmLimit),
   // the rest appear in the strip asleep and load on click.
   restoreSession() {
-    const saved = (store.openTabs || []).filter(s => findAccount(s.svc, s.id)); // skip deleted accounts
+    const saved = (store.openTabs || []).filter(s => findAccount(s.svc, s.id) && serviceByKey(s.svc)); // skip deleted accounts and missing services
     if (!saved.length) return 0;
     saved.sort((a, b) => (a.lastActivated || 0) - (b.lastActivated || 0));
     this.session = saved.map(s => ({ svc: s.svc, id: s.id, url: s.url, lastActivated: s.lastActivated || 0 }));
@@ -209,6 +237,7 @@ class ViewManager {
     const key = accountKey(svc, id);
     if (this.tabs.has(key)) { if (show) this.activate(key); return key; }
     const service = serviceByKey(svc);
+    if (!service) { console.error(`[tabs] cannot open ${svc}::${id} — service definition is missing`); return null; }
     registerAccount(svc, id, label || id);
     const acc = findAccount(svc, id);
     const view = this.makeView(svc, id);
@@ -219,6 +248,11 @@ class ViewManager {
     if (show) this.activate(key);
     view.webContents.loadURL(tab.url).catch(err => console.error(`load failed ${key}:`, err.message));
     view.webContents.on('page-title-updated', (_e, title) => { tab.title = title; this.emitState(); });
+    // Escape must reach Home even while the dashboard page has focus (the renderer's keydown
+    // handler only sees events when the chrome DOM is focused).
+    view.webContents.on('before-input-event', (_e, input) => {
+      if (input.type === 'keyDown' && input.key === 'Escape' && !this.modalOpen) this.deactivate();
+    });
     view.webContents.on('did-finish-load', () => {
       content.applyToPage(view.webContents, { adBlock: !!store.settings.adBlock, forceDark: !!store.settings.forceDark });
     });
@@ -280,7 +314,7 @@ class ViewManager {
   enforceWarmLimit() {
     const limit = Math.max(1, Number(store.settings.warmLimit) || 5);
     const warm = this.warmTabsSorted();
-    let excess = warm.length - (limit - 1); // active tab occupies one warm slot
+    let excess = warm.length - (limit - (this.activeKey ? 1 : 0)); // the active tab, if any, occupies one slot
     for (const [k] of warm) {
       if (excess <= 0) break;
       this.hibernate(k);
@@ -321,7 +355,11 @@ class ViewManager {
     this.emitState();
   }
 
-  hibernateAll() { for (const k of [...this.tabs.keys()]) this.hibernate(k); }
+  hibernateAll() {
+    this.activeKey = null; // clear first: otherwise each hibernate() re-activates a neighbour and re-persists
+    for (const k of [...this.tabs.keys()]) this.hibernate(k);
+    this.persistSession();
+  }
 
   async deleteAccount(svc, id) {
     const key = accountKey(svc, id);
@@ -368,8 +406,10 @@ class ViewManager {
       })), // live registry projection for the home grid (token presence + status summaries; never raw tokens)
       groupTabs: !!store.settings.groupTabs,
       collapsed: store.settings.collapsed || [],
+      stripCollapsed: store.settings.stripCollapsed || [],
       settings: { ...store.settings },
       blocked: content.stats.blocked,
+      credCount: creds.stats().total,
       services: allServices(), // includes user-added services so the renderer stays in sync
       // the strip shows the whole remembered open set: live tabs AND slept ones (resume on click)
       tabs: this.session.map(s => {
@@ -579,6 +619,18 @@ async function runSmokeAutofill() {
   const vm = new ViewManager();
   vm.attach(win);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // ---- origin guard regression checks (the review found both of these as critical) ----
+  check('origin-guard-accepts-service-host', originAllowed('vercel', 'https://vercel.com/login'));
+  check('origin-guard-accepts-subdomain', originAllowed('supabase', 'https://api.supabase.com/x'));
+  check('origin-guard-rejects-foreign-host', !originAllowed('vercel', 'https://accounts.google.com/signin'));
+  check('origin-guard-rejects-lookalike', !originAllowed('vercel', 'https://vercel.com.evil.example/login'));
+  creds.rememberForAccount('vercel', 'guardtest', { url: 'https://vercel.com/login', username: 'v@example.com', password: 'vercel-pw' });
+  const crossOrigin = creds.forAccount('vercel', 'guardtest', 'https://accounts.google.com/signin');
+  check('credential-not-returned-for-foreign-origin', !crossOrigin || crossOrigin.host !== 'vercel.com',
+    crossOrigin ? `leaked ${crossOrigin.host}` : 'none');
+  const sameOrigin = creds.forAccount('vercel', 'guardtest', 'https://vercel.com/login');
+  check('credential-returned-for-own-origin', !!sameOrigin && sameOrigin.password === 'vercel-pw');
 
   // capture: the preload must report credentials typed into a real form
   let captured = null;
@@ -812,6 +864,13 @@ function runInteractive(captureMode = false) {
     if (!store.settings.saveLogins) return;
     const found = tabForSender(e.sender);
     if (!found || !data || !data.password) return;
+    // Origin guard: only a login typed on the service's OWN domain may be bound to this account.
+    // Without this, a password typed on an OAuth/phishing page reached from the tab would overwrite
+    // the account's saved login and later be autofilled into the real service.
+    if (!originAllowed(found.tab.svc, data.url)) {
+      console.warn(`[logins] ignored a credential captured on a foreign origin (${creds.hostOf(data.url)}) for ${found.key}`);
+      return;
+    }
     try {
       const res = creds.rememberForAccount(found.tab.svc, found.tab.id, data);
       if (res.saved) {
@@ -826,8 +885,12 @@ function runInteractive(captureMode = false) {
     found.tab.loginForm = !!(info && info.present);
     // auto-fill this account's own remembered login when its sign-in page appears
     if (found.tab.loginForm && store.settings.autofill) {
-      const svcCfg = serviceByKey(found.tab.svc);
-      const cred = creds.forAccount(found.tab.svc, found.tab.id, svcCfg && svcCfg.loginUrl);
+      const pageUrl = (info && info.url) || found.tab.view.webContents.getURL();
+      if (!originAllowed(found.tab.svc, pageUrl)) {
+        vm.emitState();
+        return; // never auto-type a password into a page that is not the service's own site
+      }
+      const cred = creds.forAccount(found.tab.svc, found.tab.id, pageUrl);
       if (cred) e.sender.send('fill-credential', { username: cred.username, password: cred.password, submit: false });
     }
     vm.emitState();
@@ -838,8 +901,11 @@ function runInteractive(captureMode = false) {
     const t = vm.tabs.get(key);
     if (!t) throw new Error('That tab is asleep — open it first');
     const [svc, id] = key.split('::');
-    const svcCfg = serviceByKey(svc);
-    const cred = creds.forAccount(svc, id, svcCfg && svcCfg.loginUrl);
+    const pageUrl = t.view.webContents.getURL();
+    if (!originAllowed(svc, pageUrl)) {
+      throw new Error(`This tab is on ${creds.hostOf(pageUrl) || 'another site'}, not ${serviceHosts(svc)[0] || 'the service'} — refusing to fill a saved password here`);
+    }
+    const cred = creds.forAccount(svc, id, pageUrl);
     if (!cred) throw new Error('No saved login for this account yet — sign in once and it will be remembered');
     t.view.webContents.send('fill-credential', { username: cred.username, password: cred.password, submit: false });
     return true;
@@ -866,13 +932,21 @@ function runInteractive(captureMode = false) {
   // ---------- Phase 3: service plugins (JSON manifests) ----------
   ipcMain.handle('plugins-list', () => ({
     dir: plugins.pluginsDir(),
-    services: pluginServices.map(s => ({ key: s.key, name: s.name, sourceFile: s.sourceFile, hasApi: !!s.api })),
+    services: pluginServices.map(s => ({
+      key: s.key, name: s.name, sourceFile: s.sourceFile, hasApi: !!s.api,
+      shadowed: serviceByKey(s.key) !== s, // another service already owns this key
+    })),
     errors: pluginErrors,
   }));
   ipcMain.handle('plugin-install', async () => {
     const { dialog } = require('electron');
     const r = await dialog.showOpenDialog({ title: 'Install a service plugin', filters: [{ name: 'Service manifest', extensions: ['json'] }], properties: ['openFile'] });
     if (r.canceled || !r.filePaths[0]) return null;
+    const preview = plugins.validate(JSON.parse(fs.readFileSync(r.filePaths[0], 'utf8')), path.basename(r.filePaths[0]));
+    if (preview.ok) {
+      const clash = [...SERVICES, ...(store.customServices || [])].find(s => s.key === preview.service.key);
+      if (clash) throw new Error(`"${preview.service.key}" is already used by ${clash.name} — change the plugin's key`);
+    }
     const svc = plugins.install(r.filePaths[0]);
     reloadPlugins();
     vm.emitState();
@@ -910,6 +984,7 @@ function runInteractive(captureMode = false) {
     };
     store.customServices.push(svc);
     store.save();
+    refreshManagedHosts();
     vm.emitState();
     return svc;
   });
@@ -925,11 +1000,15 @@ function runInteractive(captureMode = false) {
   ipcMain.handle('set-content-setting', (_e, name, value) => {
     if (!['adBlock', 'darkMode', 'forceDark', 'saveLogins', 'autofill'].includes(name)) throw new Error(`unknown setting: ${name}`);
     store.settings[name] = !!value;
+    // Inverting a page that is already dark produces a washed-out light page, so the two modes
+    // are mutually exclusive.
+    if (name === 'forceDark' && value) store.settings.darkMode = false;
+    if (name === 'darkMode' && value) store.settings.forceDark = false;
     store.save();
-    if (name === 'darkMode') content.setNativeDark(store.settings.darkMode);
+    content.setNativeDark(!!store.settings.darkMode);
     // re-apply to every live tab so the change is visible immediately
     for (const t of vm.tabs.values()) {
-      if (name === 'forceDark' && !value) t.view.webContents.reload();
+      if ((name === 'forceDark' || name === 'adBlock') && !value) t.view.webContents.reload(); // injected CSS can only be undone by reloading
       else content.applyToPage(t.view.webContents, { adBlock: !!store.settings.adBlock, forceDark: !!store.settings.forceDark });
     }
     vm.emitState();
@@ -947,13 +1026,14 @@ function runInteractive(captureMode = false) {
     vm.emitState();
     return store.settings.groupTabs;
   });
-  ipcMain.handle('toggle-collapsed', (_e, svc) => {
-    const set = new Set(store.settings.collapsed || []);
+  ipcMain.handle('toggle-collapsed', (_e, svc, scope = 'rail') => {
+    const field = scope === 'strip' ? 'stripCollapsed' : 'collapsed'; // rail and strip collapse independently
+    const set = new Set(store.settings[field] || []);
     if (set.has(svc)) set.delete(svc); else set.add(svc);
-    store.settings.collapsed = [...set];
+    store.settings[field] = [...set];
     store.save();
     vm.emitState();
-    return store.settings.collapsed;
+    return store.settings[field];
   });
 
   // ---------- API-token layer (tokens stay in main; renderer gets summaries only) ----------
