@@ -2,6 +2,22 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.3.0 — 2026-09-07
+
+### Added
+- **Published to npm as `my-provider-dash-manager`.** `npx my-provider-dash-manager` installs (or
+  updates) the app and launches it — no checkout required.
+- **A real CLI** behind that package, also available as `mpdm`: `install`, `update`, `start`,
+  `status` (installed vs latest, plus app and data paths), `where`, `uninstall`, with `--silent`,
+  `--download-only` and `--force`. It skips the download when you are already on the latest version.
+- **Releases now publish to npm as well as GitHub.** The workflow refuses a tag that disagrees with
+  `package.json`, skips npm if that version is already published, and warns loudly if the `NPM_TOKEN`
+  secret is missing rather than silently shipping only half a release.
+
+### Fixed
+- The CLI compares versions correctly: Windows reports a four-part product version (`0.2.3.0`) against
+  a three-part release version (`0.2.3`), which would otherwise never match.
+
 ## 0.2.8 — 2026-09-07
 
 ### Fixed

@@ -31,12 +31,23 @@ panel lets you store a GitHub token, encrypted with Windows DPAPI, so the feed s
 ### Install from the command line
 
 ```bash
-npx my-provider-dash-manager                    # fetch the newest release and run its installer
-npx my-provider-dash-manager -- --silent        # install without the wizard
-npx my-provider-dash-manager -- --download-only # just fetch the .exe
+npx my-provider-dash-manager            # install (or update) and launch
 ```
 
-From a checkout of this repository, the same thing is `npm run install:latest`.
+The same CLI manages the whole lifecycle — install it globally with
+`npm i -g my-provider-dash-manager` and the commands are also available as `mpdm`:
+
+| Command | What it does |
+|---|---|
+| `my-provider-dash-manager` | Install or update to the newest release, then launch |
+| `… install` / `… update` | Install or update only |
+| `… start` | Launch the installed app |
+| `… status` | Installed version vs latest, plus where the app and your data live |
+| `… where` | Print the install and data paths |
+| `… uninstall` | Run the uninstaller (your accounts and sessions are kept) |
+
+Flags: `--silent` (no wizard), `--download-only`, `--force`, `--version`, `--help`.
+From a checkout of this repository the equivalent is `npm run install:latest`.
 
 It prints the latest version and its release notes and verifies the download really is a Windows
 executable before running it. No authentication is needed; a `GH_TOKEN` is used only if present.

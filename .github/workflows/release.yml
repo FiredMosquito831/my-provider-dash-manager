@@ -16,7 +16,21 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          registry-url: https://registry.npmjs.org
       - run: npm ci
+
+      # Guard: the tag must match package.json, or the GitHub release and the npm package would
+      # disagree about what this version is.
+      - name: Check the tag matches package.json
+        shell: bash
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$pkg" != "$tag" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $pkg"
+            exit 1
+          fi
+          echo "version $pkg"
 
       # Pre-create the release so electron-builder never races itself creating it twice
       # (that race silently dropped the installer upload on v0.2.0 — only the blockmap landed).
@@ -36,4 +50,26 @@ jobs:
           gh release edit "$env:GITHUB_REF_NAME" --draft=false
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Installer is unsigned (SmartScreen warns); code signing is tracked in docs/BACKLOG.md.
+
+      # The npm package is the installer CLI (npx my-provider-dash-manager). It must move with the
+      # release, or `npx` keeps pointing at an older installer than the GitHub release offers.
+      # Needs an NPM_TOKEN repository secret of type "Automation" (classic tokens fail 2FA with EOTP).
+      - name: Publish to npm
+        if: ${{ env.NPM_TOKEN != '' }}
+        shell: bash
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if npm view "my-provider-dash-manager@${GITHUB_REF_NAME#v}" version >/dev/null 2>&1; then
+            echo "npm already has ${GITHUB_REF_NAME#v} — nothing to publish"
+          else
+            npm publish --access public
+          fi
+
+      - name: Note when npm publishing was skipped
+        if: ${{ env.NPM_TOKEN == '' }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: echo "::warning::NPM_TOKEN secret is not set — the npm package was NOT updated for this release. Add an Automation token at Settings → Secrets → Actions."
+      # Installer is unsigned (SmartScreen warns); code signing is tracked in the working notes.
