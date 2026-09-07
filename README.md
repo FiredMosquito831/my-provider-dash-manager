@@ -57,6 +57,9 @@ sessions, one place.
 - **Imports existing passwords** from installed Chromium browsers (Chrome, Edge, Brave, Vivaldi,
   Opera) or from a CSV exported by any browser, including Firefox.
 - Everything is encrypted at rest with Windows DPAPI. Passwords never reach the app's own UI process.
+- **Origin-bound**: a login is tied to the account *and* the service's own domains. A password typed on
+  another site reached from that tab (an OAuth hand-off, a look-alike page) is never captured as that
+  account's login, and a saved password is never filled into a page outside the service's domains.
 
 ### API status
 Paste a read-only API token into an account and its Home card shows live status — project counts and
@@ -94,6 +97,19 @@ also checks quietly on startup and every four hours.
 While the repository is **private**, GitHub will not serve the release feed anonymously. Either make
 the repository public, or paste a GitHub token (read access to this repo is enough) into the panel —
 it is stored encrypted with Windows DPAPI and used only for update checks and downloads.
+
+### Install from the command line
+
+If you have the repository checked out, this pulls the newest release and runs its installer:
+
+```bash
+npm run install:latest                    # download + launch the installer
+npm run install:latest -- --silent        # install without the wizard
+npm run install:latest -- --download-only # just fetch the .exe
+```
+
+It prints the latest version and its release notes, verifies the download really is a Windows
+executable before running it, and uses `GH_TOKEN` or your `gh auth login` session for the private repo.
 
 ### Run from source
 
@@ -142,8 +158,9 @@ and `credentials.json`.
 Cookies, tokens and saved passwords are encrypted at rest with Windows DPAPI, which protects against
 another user on the machine, a stolen disk, and casual copying. It does **not** protect against
 malware running as you — no desktop app can, which is why the app never masks device identity and
-keeps API tokens scoped and revocable. Nothing syncs anywhere: there is no server, no account and no
-telemetry.
+keeps API tokens scoped and revocable. Saved logins are additionally bound to the service's own origins,
+so they cannot be captured from — or filled into — an unrelated site. Nothing syncs anywhere: there is
+no server, no account and no telemetry.
 
 ---
 
@@ -156,10 +173,14 @@ npm run smoke:restore# sessions survive a restart (real cookies)
 npm run smoke:tokens # DPAPI round-trip + live token rejection
 npm run smoke:creds  # import, per-account recall, encryption at rest
 npm run smoke:autofill # real page: form detection, fill, capture
+npm run smoke:updates  # version comparison + real release-feed check
 npm run capture      # screenshot the running shell
 npm run spike        # memory benchmark
 npm run dist         # build the Windows installer
+npm run install:latest # fetch and run the latest released installer
 ```
+
+The suite is 35 checks across five modes.
 
 `MAM_USER_DATA=<dir>` points any command at an isolated profile.
 

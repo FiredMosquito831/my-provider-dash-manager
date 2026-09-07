@@ -18,19 +18,24 @@ service, one tab per account, instant switching, and sessions that persist acros
 
 ## Architecture
 
-- **Electron 43**, `BaseWindow` + one `WebContentsView` per open account tab (BrowserView and
-  the `<webview>` tag are deprecated/discouraged).
-- **One persistent session partition per account**: `session.fromPartition('persist:<service>:<account>')`.
+- **Electron 43**, a `BrowserWindow` for the chrome + one `WebContentsView` per open account tab
+  (BrowserView and the `<webview>` tag are deprecated/discouraged). `BaseWindow` cannot be used for
+  the chrome: it has no `loadFile`/`webContents`/`ready-to-show`.
+- **One persistent session partition per account**: `persist:<service>__<sanitized-account>` (no colons
+  beyond the prefix — they become unsafe directory names on Windows).
   Each partition holds its own cookies (incl. HttpOnly), localStorage, IndexedDB, cache — fully
   isolated identities that survive restarts. Switching = activating another live view; sessions stay warm.
-- **Hibernation lifecycle**: closing a tab destroys the view but keeps the partition on disk; reopening
-  rehydrates from it (the Wavebox "sleeping tab" pattern). Bounds memory at many accounts.
-- **OAuth/popup routing**: `setWindowOpenHandler` opens popups and OAuth windows inside a new view of the
-  SAME account partition, so SSO state never leaks across accounts. Google OAuth is blocked in embedded
-  browsers by Google policy — those flows must go through the system browser (planned: fallback button).
-- **Chrome composition**: custom tab strip is the window's own page; dashboard views sit below it
-  (`y = 44px`). Views get a synchronous background color and visibility-driven switching to pre-empt
-  known Electron paint-order bugs (#43293/#47351); no draggable-region overlays on web content (#43320).
+- **Hibernation lifecycle**: sleeping a tab destroys the view but keeps the partition on disk *and*
+  keeps the tab in the strip so it can be resumed; closing removes it from the set. The open-tab set is
+  persisted to `session.json` and restored on launch (warm up to the limit, land on Home).
+- **OAuth/popup routing**: `setWindowOpenHandler` loads popup/OAuth URLs inside the SAME account's tab
+  and partition, so SSO state never leaks across accounts. Because that lets a tab reach any origin,
+  credential capture and fill are origin-guarded (see Security invariants). Google OAuth is blocked in
+  embedded browsers by Google policy — the "Browser" button hands those flows to the system browser.
+- **Chrome composition**: the window's own page renders a 48px top strip (open tabs only) and a 240px
+  left rail (providers → accounts → actions); dashboard views are positioned at `x = 240, y = 48` so they
+  can never cover the chrome. Views get a synchronous background colour and visibility-driven switching
+  to pre-empt Electron paint-order bugs (#43293/#47351); no draggable-region overlays (#43320).
 - **Security model (honest)**: partition cookie DBs are AES-GCM encrypted at rest with a DPAPI-wrapped key
   (protects against other users / stolen disk, NOT same-user malware); app secrets go through
   `safeStorage` (async, Electron 42+); no cloud sync of partitions; encrypted-ciphertext-only export when
@@ -57,17 +62,41 @@ Per-service facts that shaped the design:
 - **Vercel**: email-only accounts demand OTP at every login → prompt to link a Git provider at setup.
 - **Render**: up to 5 free Hobby workspaces under one login = compliant multi-tenancy.
 
+## Module map (as of v0.2.3)
+
+| File | Responsibility |
+|---|---|
+| `src/main.js` | App lifecycle, ViewManager (tabs, partitions, session memory, warm-limit LRU), the credential origin guard, all IPC, smoke/spike/capture modes |
+| `src/ui.html` / `src/ui.js` | The chrome: left account rail, tabs-only top strip, Home grid, modals, Updates panel. Plain DOM, no framework |
+| `src/preload.js` | contextBridge surface for the chrome renderer |
+| `src/account-preload.js` | Isolated-world helper inside every account view: login capture, fill on request, login-form detection. Exposes nothing to the page |
+| `src/services.js` | The seven curated built-in services and their multi-account policy |
+| `src/providers.js` | Read-only API status fetchers per built-in service |
+| `src/api-tokens.js` | DPAPI-encrypted token store (`safeStorage`), validated before storing |
+| `src/credentials.js` | Saved logins: encrypted store, Chromium/CSV import, per-account + per-origin recall |
+| `src/content.js` | EasyList ad-blocking (per-partition `webRequest`), cosmetic CSS, dark mode |
+| `src/plugins.js` | Service manifests: validation, load/install/remove, generic API status provider |
+| `src/updater.js` | Version tracking, release info, explicit download/install, private-repo token support |
+| `scripts/install-latest.js` | `npm run install:latest`: pull the newest release and run its installer |
+
+### Security invariants (do not regress)
+
+1. A saved credential is bound to **account AND origin**. Capture rejects foreign origins; recall
+   requires a related host; fill checks the tab's *live* URL. (D14 — this was a real vulnerability.)
+2. Account views are sandboxed, context-isolated, deny-by-default on permissions, and never receive
+   a preload that exposes anything to page JavaScript.
+3. Tokens and passwords never leave the main process; the renderer sees summaries and booleans only.
+4. Account views are positioned at `x = RAIL_W, y = TAB_STRIP_H` so they can never cover the chrome.
+5. Generic filter rules are not applied to managed dashboards, and deployment apexes are never blocked.
+
+
 ## Roadmap
 
-1. **Memory spike (week 1)** — this repo now: automated Electron benchmark loading 5/10/20/30 real
-   dashboard login pages in live vs hibernated partitions, plus restore-from-disk timing. Decides
-   Electron-vs-WebView2 before shell investment. `npm run spike` → `spike-report.json`.
-2. **Shell v1** — service rail + account tab strip + home grid of service×account tiles with session
-   status; guided signup wizard per new account; "open in system browser" escape hatch on every tab;
-   hibernation settings; per-account proxy (opt-in, advanced). UI design pass with `ui-ux-pro-max`.
-3. **API layer** — optional per-account API tokens (safeStorage-encrypted, scoped, revocable from the app)
-   powering home-screen status cards (deploys, project lists) and quick actions.
-4. **Phase 2** — generic services (add any URL). 5. **Phase 3** — plugin manifests. Sync later.
+Phases 1–3 are **delivered** (curated services → any-URL services → plugin manifests), along with the
+API-token layer, saved logins, content blocking and the update system. The memory spike that decided
+Electron-vs-WebView2 is recorded below. Remaining work lives in `docs/BACKLOG.md`; the near-term items
+are per-account content settings, direct Firefox password import, and code signing.
+
 
 ## Memory spike results (Sept 7, 2026 — Electron 43, Windows 11, 64 GB RAM, login pages of all 7 services)
 

@@ -18,6 +18,10 @@ All notable changes. Format loosely follows Keep a Changelog.
   the UI stating plainly that installing an update requires the packaged build.
 - `npm run smoke:updates`: 9 checks covering version comparison, dev-mode capabilities, and a real
   release-feed check with an actionable error.
+- **`npm run install:latest`**: pulls the newest published release and runs its installer, printing the
+  version and release notes first. Supports `--silent` and `--download-only`, uses `GH_TOKEN` or your
+  `gh` session for the private repo, and verifies the download is a real Windows executable (and the
+  expected size) before launching it.
 
 ## 0.2.2 — 2026-09-07
 
