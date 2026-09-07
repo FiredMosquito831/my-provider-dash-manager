@@ -17,3 +17,6 @@ docs/BACKLOG.md
 docs/DECISIONS.md
 docs/AUDIT-*.md
 .internal-git/
+
+# local tooling state
+.commandcode/

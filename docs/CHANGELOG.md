@@ -2,6 +2,20 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.2.4 — 2026-09-07
+
+### Added
+- README screenshots taken from a demo profile with placeholder account names: the Home grid with the
+  account rail, a real dashboard running inside the shell, the grouped tab strip, and the
+  Updates / Saved-logins panels.
+- Screenshot tooling: `--capture-out/--capture-open/--capture-scroll/--capture-js`, a separate
+  view-layer capture (native child views never appear in a window capture), `scripts/shot.ps1`
+  (PrintWindow, so it can only ever capture this app) and `scripts/composite.ps1`.
+- `--open <service>::<account>` opens and focuses an account at startup.
+
+### Fixed
+- The tab strip could overflow into the memory readout when many tabs were open.
+
 ## 0.2.3 — 2026-09-07
 
 ### Added
