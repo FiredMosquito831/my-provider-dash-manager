@@ -10,6 +10,13 @@ source-available licence: free for personal and commercial use</sub>
 
 ![Home — the account rail on the left, every account as a card, the installed version bottom-left](docs/screenshots/home.png)
 
+Further down Home: the **Add an account** picker with every built-in service you are not using yet
+(37 in total, or add any site by URL), the **Updates** panel with the installed version, and the
+saved-login controls. Install with `npx my-provider-dash-manager` or straight from
+[Releases](https://github.com/FiredMosquito831/my-provider-dash-manager/releases) — see [Install](#install).
+
+![Home, scrolled down — the service picker grouped by category, the Updates panel and saved logins](docs/screenshots/services.png)
+
 ![A Gmail account open in the app, with back / forward / reload / dashboard and the address bar in the strip](docs/screenshots/navigation.png)
 
 <sub>Screenshots use a demo profile with placeholder account names.</sub>

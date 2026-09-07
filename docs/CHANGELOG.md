@@ -2,6 +2,12 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.6.3 — 2026-09-07
+
+### Changed
+- README: a third screenshot showing the service picker, Updates panel and saved-login controls,
+  with the install routes (npx or the release page) called out next to it.
+
 ## 0.6.2 — 2026-09-07
 
 ### Changed
