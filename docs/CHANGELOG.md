@@ -2,6 +2,12 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.4.1 — 2026-09-07
+
+### Changed
+- Releases publish to npm through npm trusted publishing (OIDC) with a provenance attestation. No
+  publishing token is stored anywhere any more.
+
 ## 0.4.0 — 2026-09-07
 
 ### Added
