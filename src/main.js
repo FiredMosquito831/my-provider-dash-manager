@@ -8,6 +8,7 @@ const { PROVIDERS } = require('./providers');
 const statusCache = new Map(); // accountKey -> { summary?, error?, fetchedAt } — summaries only, tokens never leave main
 
 const TAB_STRIP_H = 48;
+const RAIL_W = 240; // left account rail — account views must never cover it (must match --rail in ui.html)
 const SETTLE_MS = Number(process.env.SPIKE_SETTLE_MS || 8000);
 const COLORS = ['#e5484d', '#f76b15', '#ffc53d', '#46a758', '#00a2c7', '#4f8cff', '#8e4ec6', '#e93d82', '#6e56cf', '#00b0a0'];
 const permissionConfigured = new WeakSet(); // one permission policy per partition session
@@ -27,14 +28,17 @@ function writeJson(file, data) {
 
 const store = {
   accounts: [], // {svc, id, label, colorIdx, proxy, createdAt, lastState}
-  settings: { warmLimit: 5 },
+  settings: { warmLimit: 5, groupTabs: false, collapsed: [] },
+  openTabs: [], // session memory: [{svc, id, url, lastActivated, active}] — survives restarts
   save() {
     writeJson(userDataPath('accounts.json'), this.accounts);
-    writeJson(userData('settings.json'), this.settings);
+    writeJson(userDataPath('settings.json'), this.settings);
   },
+  saveSession() { writeJson(userDataPath('session.json'), this.openTabs); },
   load() {
     this.accounts = readJson(userDataPath('accounts.json'), []);
-    this.settings = Object.assign({ warmLimit: 5 }, readJson(userData('settings.json'), {}));
+    this.settings = Object.assign({ warmLimit: 5, groupTabs: false, collapsed: [] }, readJson(userDataPath('settings.json'), {}));
+    this.openTabs = readJson(userDataPath('session.json'), []);
   },
 };
 function userData(name) { return userDataPath(name); }
@@ -60,7 +64,8 @@ function accountKey(svc, id) { return `${svc}::${id}`; }
 // ---------- view manager ----------
 class ViewManager {
   constructor() {
-    this.tabs = new Map(); // key -> {view, svc, id, url, visible, title, lastState, lastActivated}
+    this.tabs = new Map(); // key -> {view, svc, id, url, visible, title, lastState, lastActivated} — LIVE views only
+    this.session = []; // ordered open-tab set [{svc,id,url,lastActivated}] — includes slept tabs, persisted across restarts
     this.activeKey = null;
     this.window = null;
     this.contentBounds = { x: 0, y: TAB_STRIP_H, width: 800, height: 600 };
@@ -68,6 +73,44 @@ class ViewManager {
   }
 
   attach(win) { this.window = win; }
+
+  // ---- session memory: the open-tab set survives sleeping AND app restarts ----
+  sessionEntry(svc, id) { return this.session.find(s => s.svc === svc && s.id === id); }
+
+  trackSession(svc, id, url) {
+    let e = this.sessionEntry(svc, id);
+    if (!e) { e = { svc, id, url, lastActivated: Date.now() }; this.session.push(e); }
+    else if (url) e.url = url;
+    this.persistSession();
+    return e;
+  }
+
+  untrackSession(svc, id) {
+    this.session = this.session.filter(s => !(s.svc === svc && s.id === id));
+    this.persistSession();
+  }
+
+  persistSession() {
+    store.openTabs = this.session.map(s => ({ svc: s.svc, id: s.id, url: s.url, lastActivated: s.lastActivated, active: accountKey(s.svc, s.id) === this.activeKey }));
+    store.saveSession();
+  }
+
+  // Restore the tab set from the previous run: most-recent tabs come back live (bounded by warmLimit),
+  // the rest appear in the strip asleep and load on click.
+  restoreSession() {
+    const saved = (store.openTabs || []).filter(s => findAccount(s.svc, s.id)); // skip deleted accounts
+    if (!saved.length) return 0;
+    saved.sort((a, b) => (a.lastActivated || 0) - (b.lastActivated || 0));
+    this.session = saved.map(s => ({ svc: s.svc, id: s.id, url: s.url, lastActivated: s.lastActivated || 0 }));
+    const limit = Math.max(1, Number(store.settings.warmLimit) || 5);
+    const toWake = saved.slice(-limit);
+    // Tabs come back warm but nothing is auto-activated: the app lands on Home (the account grid),
+    // which is the view the owner wants as the default surface.
+    for (const s of toWake) this.create(s.svc, s.id, s.url, { show: false, restoring: true });
+    this.activeKey = null;
+    this.emitState();
+    return toWake.length;
+  }
 
   setBounds(b) {
     this.contentBounds = b;
@@ -131,6 +174,7 @@ class ViewManager {
     const view = this.makeView(svc, id);
     const tab = { view, svc, id, url: url || service.dashboardUrl, visible: false, title: '', lastState: acc.lastState || 'unknown', lastActivated: Date.now() };
     this.tabs.set(key, tab);
+    this.trackSession(svc, id, tab.url); // tab joins the remembered open set
     this.window.contentView.addChildView(view);
     if (show) this.activate(key);
     view.webContents.loadURL(tab.url).catch(err => console.error(`load failed ${key}:`, err.message));
@@ -176,6 +220,9 @@ class ViewManager {
     }
     tab.lastActivated = Date.now();
     this.activeKey = key;
+    const se = this.sessionEntry(tab.svc, tab.id);
+    if (se) { se.lastActivated = tab.lastActivated; se.url = tab.url; }
+    this.persistSession();
     this.enforceWarmLimit();
     this.emitState();
     return key;
@@ -198,16 +245,35 @@ class ViewManager {
     }
   }
 
+  // Home: hide every account view and show the chrome's grid. Tabs stay LIVE and warm — no teardown,
+  // so returning to a tab is instant and its page keeps its place.
+  deactivate() {
+    for (const t of this.tabs.values()) if (t.visible) { t.view.setVisible(false); t.visible = false; }
+    this.activeKey = null;
+    this.persistSession();
+    this.emitState();
+  }
+
+  // Close = remove from the remembered tab set entirely (disappears from the strip).
+  closeTab(key) {
+    const [svc, id] = key.split('::');
+    this.hibernate(key);
+    this.untrackSession(svc, id);
+    this.emitState();
+  }
+
   hibernate(key) {
     const tab = this.tabs.get(key);
     if (!tab) return;
     try { this.window.contentView.removeChildView(tab.view); } catch {}
     try { tab.view.webContents.close(); } catch {} // separate: a dead contentView must not skip closing the renderer
     this.tabs.delete(key);
+    // NOTE: the session entry is intentionally kept — a slept tab stays in the strip and can be resumed.
     if (this.activeKey === key) {
       this.activeKey = null;
       const remaining = [...this.tabs.values()].sort((a, b) => b.lastActivated - a.lastActivated);
       if (remaining.length) this.activate(accountKey(remaining[0].svc, remaining[0].id));
+      else this.persistSession();
     }
     this.emitState();
   }
@@ -220,6 +286,7 @@ class ViewManager {
       try { this.window.contentView.removeChildView(this.tabs.get(key).view); this.tabs.get(key).view.webContents.close(); } catch {}
       this.tabs.delete(key);
     }
+    this.untrackSession(svc, id); // also drop it from the remembered tab set
     store.accounts = store.accounts.filter(a => !(a.svc === svc && a.id === id));
     store.save();
     try {
@@ -256,11 +323,18 @@ class ViewManager {
         hasToken: !!tokens.tokenMeta(accountKey(a.svc, a.id)),
         status: statusCache.get(accountKey(a.svc, a.id)) || null,
       })), // live registry projection for the home grid (token presence + status summaries; never raw tokens)
-      tabs: [...this.tabs.entries()].map(([k, t]) => {
-        const a = findAccount(t.svc, t.id) || {};
+      groupTabs: !!store.settings.groupTabs,
+      collapsed: store.settings.collapsed || [],
+      // the strip shows the whole remembered open set: live tabs AND slept ones (resume on click)
+      tabs: this.session.map(s => {
+        const k = accountKey(s.svc, s.id);
+        const t = this.tabs.get(k);
+        const a = findAccount(s.svc, s.id) || {};
         return {
-          key: k, svc: t.svc, id: t.id, label: a.label || t.id, colorIdx: a.colorIdx || 0,
-          title: t.title, url: t.url, visible: t.visible, lastState: t.lastState,
+          key: k, svc: s.svc, id: s.id, label: a.label || s.id, colorIdx: a.colorIdx || 0,
+          title: t ? t.title : '', url: t ? t.url : s.url,
+          live: !!t, visible: t ? t.visible : false,
+          lastState: t ? t.lastState : (a.lastState || 'unknown'),
         };
       }),
     });
@@ -465,7 +539,8 @@ function runInteractive(captureMode = false) {
   }
   const applyBounds = () => {
     const [w, h] = win.getContentSize();
-    vm.setBounds({ x: 0, y: TAB_STRIP_H, width: w, height: h - TAB_STRIP_H });
+    // reserve the left rail: account views start after it, so the rail (and Home) is always reachable
+    vm.setBounds({ x: RAIL_W, y: TAB_STRIP_H, width: Math.max(0, w - RAIL_W), height: h - TAB_STRIP_H });
   };
   win.once('ready-to-show', () => { applyBounds(); if (!captureMode) win.show(); });
   if (captureMode) {
@@ -533,7 +608,14 @@ function runInteractive(captureMode = false) {
   ]);
   Menu.setApplicationMenu(menu);
 
-  ipcMain.on('ui-ready', () => vm.emitState());
+  ipcMain.on('ui-ready', () => {
+    if (!vm.sessionRestored) {
+      vm.sessionRestored = true;
+      const n = vm.restoreSession(); // bring back the tabs that were open at exit
+      if (n) console.log(`[session] restored ${n} live tab(s) of ${vm.session.length} remembered`);
+    }
+    vm.emitState();
+  });
   ipcMain.handle('list-services', () => SERVICES);
   ipcMain.handle('registry-list', () => store.accounts.map(a => ({ ...a, key: accountKey(a.svc, a.id) })));
   ipcMain.handle('get-settings', () => store.settings);
@@ -577,9 +659,23 @@ function runInteractive(captureMode = false) {
   });
   ipcMain.handle('set-modal-open', (_e, open) => vm.setModalOpen(!!open));
   ipcMain.handle('show-home', () => {
-    // dedicated Home: sleep the active tab (session stays on disk) so the home grid is reachable again
-    if (vm.activeKey) vm.hibernate(vm.activeKey);
+    vm.deactivate(); // hide views, keep tabs live and warm — instant return to any tab
     return true;
+  });
+  ipcMain.handle('close-tab', (_e, key) => vm.closeTab(key));
+  ipcMain.handle('set-group-tabs', (_e, on) => {
+    store.settings.groupTabs = !!on;
+    store.save();
+    vm.emitState();
+    return store.settings.groupTabs;
+  });
+  ipcMain.handle('toggle-collapsed', (_e, svc) => {
+    const set = new Set(store.settings.collapsed || []);
+    if (set.has(svc)) set.delete(svc); else set.add(svc);
+    store.settings.collapsed = [...set];
+    store.save();
+    vm.emitState();
+    return store.settings.collapsed;
   });
 
   // ---------- API-token layer (tokens stay in main; renderer gets summaries only) ----------
