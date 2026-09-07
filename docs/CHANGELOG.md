@@ -2,6 +2,17 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.2.7 — 2026-09-07
+
+### Changed
+- Package renamed to **my-provider-dash-manager** (matching the repository and the app) and prepared
+  for npm: a `bin` entry means `npx my-provider-dash-manager` fetches and runs the latest installer.
+- The user-data folder is **pinned to the original location**, so the rename cannot orphan existing
+  accounts, sessions or saved logins.
+
+### Added
+- `--print-paths` prints the app name, version and data folder — useful for support.
+
 ## 0.2.6 — 2026-09-07
 
 ### Fixed

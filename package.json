@@ -1,7 +1,7 @@
 {
-  "name": "multi-acc-manager",
-  "version": "0.2.6",
-  "description": "Multi-account manager for Vercel/Netlify/Supabase-style dashboards",
+  "name": "my-provider-dash-manager",
+  "version": "0.2.7",
+  "description": "Manage many accounts per cloud service (Vercel, Netlify, Supabase, Cloudflare, Railway, Render, GitHub) in one desktop app \u2014 isolated persistent sessions, one tab per account.",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
@@ -13,7 +13,7 @@
     "dist": "electron-builder --win",
     "smoke:creds": "electron . --smoke-creds",
     "smoke:autofill": "electron . --smoke-autofill",
-    "internal:save": "git --git-dir=.internal-git --work-tree=. add -f CLAUDE.md PROJECT.md docs/WORKLOG.md docs/LEARNINGS.md docs/BACKLOG.md docs/DECISIONS.md docs/AUDIT-*.md && git --git-dir=.internal-git --work-tree=. commit -m \"internal artifacts snapshot\"",
+    "internal:save": "git --git-dir=.internal-git --work-tree=. add -f CLAUDE.md docs/WORKING-NOTES.md && git --git-dir=.internal-git --work-tree=. commit -m \"internal notes snapshot\"",
     "internal:log": "git --git-dir=.internal-git --work-tree=. log --oneline",
     "smoke:updates": "electron . --smoke-updates",
     "install:latest": "node scripts/install-latest.js"
@@ -48,5 +48,46 @@
     },
     "artifactName": "My-Provider-Dash-Manager-Setup-${version}.${ext}"
   },
-  "license": "SEE LICENSE IN LICENSE"
+  "license": "SEE LICENSE IN LICENSE",
+  "bin": {
+    "my-provider-dash-manager": "scripts/install-latest.js"
+  },
+  "files": [
+    "scripts/install-latest.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FiredMosquito831/my-provider-dash-manager.git"
+  },
+  "homepage": "https://github.com/FiredMosquito831/my-provider-dash-manager",
+  "bugs": {
+    "url": "https://github.com/FiredMosquito831/my-provider-dash-manager/issues"
+  },
+  "author": "FiredMosquito831",
+  "keywords": [
+    "multi-account",
+    "account-manager",
+    "vercel",
+    "netlify",
+    "supabase",
+    "cloudflare",
+    "railway",
+    "render",
+    "github",
+    "electron",
+    "dashboard",
+    "sessions",
+    "windows"
+  ],
+  "os": [
+    "win32"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }

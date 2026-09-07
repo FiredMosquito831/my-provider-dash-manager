@@ -17,7 +17,12 @@ const SETTLE_MS = Number(process.env.SPIKE_SETTLE_MS || 8000);
 const COLORS = ['#e5484d', '#f76b15', '#ffc53d', '#46a758', '#00a2c7', '#4f8cff', '#8e4ec6', '#e93d82', '#6e56cf', '#00b0a0'];
 const permissionConfigured = new WeakSet(); // one permission policy per partition session
 
+// The package was renamed to my-provider-dash-manager for npm, which would move Electron's userData
+// (it derives from the package name) and orphan every existing account, session and saved login.
+// Pin it to the original folder so upgrades keep their data.
+const LEGACY_USER_DATA = 'multi-acc-manager';
 if (process.env.MAM_USER_DATA) app.setPath('userData', process.env.MAM_USER_DATA);
+else app.setPath('userData', path.join(app.getPath('appData'), LEGACY_USER_DATA));
 
 // ---------- persistence ----------
 function userDataPath(name) { return path.join(app.getPath('userData'), name); }
@@ -1229,6 +1234,16 @@ if (!gotLock) {
     if (w) { if (w.isMinimized()) w.restore(); w.focus(); }
   });
   app.whenReady().then(() => {
+    // --print-paths: where does this build keep its data? (support + rename verification)
+    if (process.argv.includes('--print-paths')) {
+      console.log(JSON.stringify({
+        appName: app.getName(),
+        version: app.getVersion(),
+        userData: app.getPath('userData'),
+        partitions: path.join(app.getPath('userData'), 'Partitions'),
+      }, null, 2));
+      return app.exit(0);
+    }
     store.load();
     if (process.argv.includes('--spike')) runSpike().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke')) runSmoke().catch(err => { console.error(err); app.exit(1); });

@@ -10,13 +10,16 @@ ui-screenshot.png
 # Internal working artifacts — kept on disk and versioned in .internal-git,
 # deliberately NOT published to GitHub (see "Internal artifacts" in CLAUDE.md).
 CLAUDE.md
+docs/WORKING-NOTES.md
+.internal-git/
+# retired (content merged into docs/WORKING-NOTES.md) — keep ignored in case they reappear
 PROJECT.md
 docs/WORKLOG.md
 docs/LEARNINGS.md
 docs/BACKLOG.md
 docs/DECISIONS.md
+docs/FEATURES.md
 docs/AUDIT-*.md
-.internal-git/
 
 # local tooling state
 .commandcode/
