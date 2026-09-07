@@ -9,7 +9,8 @@
     "smoke": "electron . --smoke",
     "smoke:restore": "electron . --smoke-restore",
     "smoke:tokens": "electron . --smoke-tokens",
-    "capture": "electron . --capture"
+    "capture": "electron . --capture",
+    "dist": "electron-builder --win"
   },
   "devDependencies": {
     "electron": "^43.0.0",
