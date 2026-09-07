@@ -8,7 +8,8 @@
     "spike": "electron . --spike",
     "smoke": "electron . --smoke",
     "smoke:restore": "electron . --smoke-restore",
-    "smoke:tokens": "electron . --smoke-tokens"
+    "smoke:tokens": "electron . --smoke-tokens",
+    "capture": "electron . --capture"
   },
   "devDependencies": {
     "electron": "^43.0.0",

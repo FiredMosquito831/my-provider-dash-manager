@@ -442,13 +442,14 @@ async function runSmokeRestore() {
 }
 
 // ---------- interactive mode ----------
-function runInteractive() {
+function runInteractive(captureMode = false) {
   // BrowserWindow, not BaseWindow: the chrome page needs loadFile/webContents/ready-to-show, which
   // BaseWindow lacks entirely. BrowserWindow extends BaseWindow, so contentView.addChildView (account
   // views), getContentSize, and Menu accelerators all keep working.
   const win = new BrowserWindow({
     width: 1400, height: 900,
     backgroundColor: '#1b1d22',
+    show: !captureMode, // capture mode still shows the window: capturePage on hidden windows returns blank
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   const vm = new ViewManager();
@@ -466,7 +467,20 @@ function runInteractive() {
     const [w, h] = win.getContentSize();
     vm.setBounds({ x: 0, y: TAB_STRIP_H, width: w, height: h - TAB_STRIP_H });
   };
-  win.once('ready-to-show', () => { applyBounds(); win.show(); });
+  win.once('ready-to-show', () => { applyBounds(); if (!captureMode) win.show(); });
+  if (captureMode) {
+    win.webContents.once('did-finish-load', () => {
+      setTimeout(async () => {
+        try {
+          applyBounds();
+          const img = await win.webContents.capturePage();
+          fs.writeFileSync(path.join(__dirname, '..', 'ui-screenshot.png'), img.toPNG());
+          console.log('[capture] saved ui-screenshot.png', JSON.stringify(img.getSize()));
+        } catch (err) { console.error('[capture] failed:', err.message); }
+        app.exit(0);
+      }, 7000);
+    });
+  }
   win.on('resize', applyBounds);
   win.on('close', () => { vm.hibernateAll(); }); // 'close' fires before destruction — contentView is still usable here
 
@@ -632,6 +646,7 @@ if (!gotLock) {
     else if (process.argv.includes('--smoke')) runSmoke().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke-restore')) runSmokeRestore().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke-tokens')) runSmokeTokens().catch(err => { console.error(err); app.exit(1); });
+    else if (process.argv.includes('--capture')) runInteractive(true);
     else runInteractive();
   });
 }
