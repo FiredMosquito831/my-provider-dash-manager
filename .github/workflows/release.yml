@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write   # npm trusted publishing (OIDC) — no npm token needed once the trusted publisher is configured
 
 jobs:
   release:
@@ -18,6 +19,8 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
       - run: npm ci
+      # Trusted publishing needs npm >= 11.5.1; make sure the runner's bundled npm is new enough.
+      - run: npm install -g npm@latest && npm --version
 
       # Guard: the tag must match package.json, or the GitHub release and the npm package would
       # disagree about what this version is.
@@ -53,7 +56,11 @@ jobs:
 
       # The npm package is the installer CLI (npx my-provider-dash-manager). It must move with the
       # release, or `npx` keeps pointing at an older installer than the GitHub release offers.
-      # Needs an NPM_TOKEN repository secret of type "Automation" (classic tokens fail 2FA with EOTP).
+      # Auth: npm **trusted publishing** (OIDC). The package's Trusted Publisher on npmjs.com must name
+      # this repo and this workflow file (release.yml); npm then mints a short-lived credential from
+      # the job's OIDC token and adds a provenance attestation. No secret involved. If an NPM_TOKEN
+      # secret exists it is used only as a fallback (a granular token with "Bypass 2FA" works; a
+      # login-session token does not — EOTP).
       # continue-on-error: the GitHub release has already published by this point, so a failure here
       # must not fail the whole release. It reports loudly instead, and the next step makes the
       # mismatch impossible to miss.
@@ -62,13 +69,12 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if npm view "my-provider-dash-manager@${GITHUB_REF_NAME#v}" version >/dev/null 2>&1; then
             echo "npm already has ${GITHUB_REF_NAME#v} — nothing to publish"
           else
-            npm publish --access public
+            npm publish --access public --provenance
           fi
 
       # Always report whether npm actually matches the tag, whatever happened above.
@@ -81,7 +87,7 @@ jobs:
             echo "npm is at $got — matches the release"
           else
             echo "::warning::npm is at $got but this release is $want. The npm package was NOT updated."
-            echo "::warning::Publishing needs an **Automation** npm token in the NPM_TOKEN secret — classic and login-session tokens fail with EOTP because the account enforces 2FA for writes."
+            echo "::warning::Fix: on npmjs.com → package → Settings → Trusted Publisher → GitHub Actions: owner FiredMosquito831, repo my-provider-dash-manager, workflow release.yml. Or set NPM_TOKEN to a granular token with 'Bypass 2FA'."
             echo "::warning::Until then, publish manually: npm publish --access public"
           fi
       # Installer is unsigned (SmartScreen warns); code signing is tracked in the working notes.
