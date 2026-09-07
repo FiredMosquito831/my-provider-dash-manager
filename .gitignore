@@ -20,3 +20,4 @@ docs/AUDIT-*.md
 
 # local tooling state
 .commandcode/
+cap.log
