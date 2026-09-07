@@ -6,3 +6,14 @@ smoke-report.json
 *.local
 .remember/
 ui-screenshot.png
+
+# Internal working artifacts — kept on disk and versioned in .internal-git,
+# deliberately NOT published to GitHub (see "Internal artifacts" in CLAUDE.md).
+CLAUDE.md
+PROJECT.md
+docs/WORKLOG.md
+docs/LEARNINGS.md
+docs/BACKLOG.md
+docs/DECISIONS.md
+docs/AUDIT-*.md
+.internal-git/

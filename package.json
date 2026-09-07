@@ -12,7 +12,9 @@
     "capture": "electron . --capture",
     "dist": "electron-builder --win",
     "smoke:creds": "electron . --smoke-creds",
-    "smoke:autofill": "electron . --smoke-autofill"
+    "smoke:autofill": "electron . --smoke-autofill",
+    "internal:save": "git --git-dir=.internal-git --work-tree=. add -f CLAUDE.md PROJECT.md docs/WORKLOG.md docs/LEARNINGS.md docs/BACKLOG.md docs/DECISIONS.md docs/AUDIT-*.md && git --git-dir=.internal-git --work-tree=. commit -m \"internal artifacts snapshot\"",
+    "internal:log": "git --git-dir=.internal-git --work-tree=. log --oneline"
   },
   "devDependencies": {
     "electron": "^43.0.0",
