@@ -2,6 +2,21 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.7.0 — 2026-09-07
+
+### Added
+- **Automatic, silent updates.** New releases now download in the background and install silently
+  (no installer wizard) either when you close the app or when you press **Restart & update**. The
+  app relaunches on the new version. An **Auto-update** toggle in the Updates panel turns this off,
+  which restores the old press-a-button-for-each-step flow. The interactive installer wizard is only
+  ever shown for a first install.
+- The rail badge reads "Restart to update x.y.z" once an update is downloaded.
+- `npx my-provider-dash-manager` / `mpdm update` now update an existing install silently and in
+  place; `--interactive` brings the wizard back, and first installs still get the wizard.
+
+### Changed
+- "Restart & install" is now "Restart & update" and no longer opens the installer wizard.
+
 ## 0.6.3 — 2026-09-07
 
 ### Changed

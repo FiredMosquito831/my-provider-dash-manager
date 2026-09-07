@@ -48,7 +48,7 @@ const store = {
   saveSession() { writeJson(userDataPath('session.json'), this.openTabs); },
   load() {
     this.accounts = readJson(userDataPath('accounts.json'), []);
-    this.settings = Object.assign({ warmLimit: 5, groupTabs: false, collapsed: [], stripCollapsed: [], adBlock: true, darkMode: true, forceDark: false, saveLogins: true, autofill: true }, readJson(userDataPath('settings.json'), {}));
+    this.settings = Object.assign({ warmLimit: 5, groupTabs: false, collapsed: [], stripCollapsed: [], adBlock: true, darkMode: true, forceDark: false, saveLogins: true, autofill: true, autoUpdate: true }, readJson(userDataPath('settings.json'), {}));
     this.openTabs = readJson(userDataPath('session.json'), []);
     this.customServices = readJson(userDataPath('services.json'), []);
   },
@@ -816,6 +816,9 @@ async function runSmokeUpdates() {
   const init = updater.init(() => {});
   check('reports-current-version', init.currentVersion === app.getVersion(), init.currentVersion);
   check('knows-it-cannot-install-in-dev', init.canDownload === false && init.packaged === false);
+  check('update-installs-silently-and-relaunches', updater.INSTALL_MODE.isSilent === true && updater.INSTALL_MODE.isForceRunAfter === true);
+  check('auto-update-defaults-on', store.settings.autoUpdate === true && init.autoUpdate === true);
+  check('auto-update-toggle', updater.setAutoUpdate(false) === false && updater.snapshot().autoUpdate === false && updater.setAutoUpdate(true) === true);
 
   const s = await updater.check();
   check('check-completes-with-a-verdict', ['available', 'up-to-date', 'error'].includes(s.status), `status=${s.status}`);
@@ -877,7 +880,7 @@ function runInteractive(captureMode = false) {
   win.loadFile(path.join(__dirname, 'ui.html'));
   // Update system: version tracking + release info + explicit user-driven download/install.
   // Nothing downloads or installs on its own; the UI shows what is available and you decide.
-  updater.init(s => { if (win && win.webContents && !win.webContents.isDestroyed()) win.webContents.send('update-state', s); });
+  updater.init(s => { if (win && win.webContents && !win.webContents.isDestroyed()) win.webContents.send('update-state', s); }, { autoUpdate: store.settings.autoUpdate !== false });
   updater.check().catch(() => {});                                 // one check at startup
   setInterval(() => updater.check().catch(() => {}), 60 * 60 * 1000); // and hourly after that
   const applyBounds = () => {
@@ -1225,8 +1228,9 @@ function runInteractive(captureMode = false) {
     return true;
   });
   ipcMain.handle('set-content-setting', (_e, name, value) => {
-    if (!['adBlock', 'darkMode', 'forceDark', 'saveLogins', 'autofill'].includes(name)) throw new Error(`unknown setting: ${name}`);
+    if (!['adBlock', 'darkMode', 'forceDark', 'saveLogins', 'autofill', 'autoUpdate'].includes(name)) throw new Error(`unknown setting: ${name}`);
     store.settings[name] = !!value;
+    if (name === 'autoUpdate') { store.save(); updater.setAutoUpdate(!!value); vm.emitState(); return !!value; }
     // Inverting a page that is already dark produces a washed-out light page, so the two modes
     // are mutually exclusive.
     if (name === 'forceDark' && value) store.settings.darkMode = false;

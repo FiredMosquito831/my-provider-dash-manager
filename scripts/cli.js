@@ -9,7 +9,7 @@
 //   npx my-provider-dash-manager uninstall  run the app's uninstaller
 //   npx my-provider-dash-manager where      print the install and data paths
 //
-// Flags: --silent (no wizard) · --download-only · --version · --help
+// Flags: --silent (no wizard) · --interactive (wizard even for an update) · --download-only · --version · --help
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -82,11 +82,15 @@ async function install({ launchAfter }) {
   if (rel.notes) console.log(`\n${rel.notes.split('\n').slice(0, 10).join('\n')}\n`);
   const dest = await downloadAsset(rel);
   if (flags.has('--download-only')) { console.log(`\nSaved to ${dest}`); return; }
-  console.log(`\nRunning the installer${flags.has('--silent') ? ' (silent)' : ''}…`);
-  const child = spawn(dest, flags.has('--silent') ? ['/S'] : [], { detached: true, stdio: 'ignore' });
+  // An update over an existing install runs silently (no wizard) unless --interactive is given;
+  // a first install shows the wizard unless --silent is given.
+  const silent = flags.has('--silent') || (!!have && !flags.has('--interactive'));
+  console.log(`\nRunning the installer${silent ? ' (silent, in place)' : ''}…`);
+  if (silent && have) console.log('Close the app if it is running, or the running copy keeps the old version until restarted.');
+  const child = spawn(dest, silent ? ['/S'] : [], { detached: true, stdio: 'ignore' });
   child.unref();
-  console.log('The installer is unsigned, so SmartScreen may ask you to confirm.');
-  if (launchAfter && flags.has('--silent')) {
+  if (!silent) console.log('The installer is unsigned, so SmartScreen may ask you to confirm.');
+  if (launchAfter && silent) {
     setTimeout(() => { try { launch(); } catch (e) { console.error(e.message); } }, 15000);
   }
 }
@@ -131,7 +135,8 @@ function help() {
   npx my-provider-dash-manager where       print install and data paths
   npx my-provider-dash-manager uninstall   run the uninstaller (keeps your data)
 
-Flags: --silent  --download-only  --force  --version  --help
+Flags: --silent  --interactive  --download-only  --force  --version  --help
+Updates over an existing install run silently; first installs show the wizard.
 Windows only. https://github.com/FiredMosquito831/my-provider-dash-manager`);
 }
 

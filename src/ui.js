@@ -210,7 +210,7 @@ function renderRail() {
     <button class="ctlbtn" id="rail-refresh" title="Re-fetch API status for connected accounts">${icon('refresh')} Status</button>
     <button class="ctlbtn" id="rail-sleep" title="Sleep all tabs — they stay in the strip">${icon('moon')} Sleep</button>
     <button class="ctlbtn ${newer ? 'on' : ''}" id="rail-ver" title="${newer ? `Version ${esc(u.latestVersion)} is available — open the Updates panel` : 'Installed version — open the Updates panel'}">
-      ${icon(newer ? 'download' : 'spark')} ${newer ? `Update ${esc(u.latestVersion)}` : `v${esc(u.currentVersion || '')}`}</button>`;
+      ${icon(newer ? 'download' : 'spark')} ${u.status === 'downloaded' ? `Restart to update ${esc(u.latestVersion)}` : newer ? `Update ${esc(u.latestVersion)}` : `v${esc(u.currentVersion || '')}`}</button>`;
 }
 
 function acctRow(a) {
@@ -406,8 +406,8 @@ function updatePanel() {
     line = `Downloading ${esc(u.latestVersion || '')}… ${p.percent != null ? p.percent + '%' : ''} ${p.total ? `(${fmtBytes(p.transferred)} of ${fmtBytes(p.total)})` : ''}`;
     buttons = '';
   } else if (u.status === 'downloaded') {
-    line = `<span class="ok">Version ${esc(u.latestVersion)} is ready to install.</span>`;
-    buttons = `<button class="ctlbtn on" id="upd-install" title="Restart the app and install the update">${icon('spark')} Restart &amp; install</button>`;
+    line = `<span class="ok">Version ${esc(u.latestVersion)} is downloaded.</span> It installs silently when you close the app — or restart now.`;
+    buttons = `<button class="ctlbtn on" id="upd-install" title="Restart now and install the update silently (no installer wizard)">${icon('spark')} Restart &amp; update</button>`;
   } else if (u.status === 'error') {
     line = `<span class="warn">${esc(u.error || 'Update check failed.')}</span>`;
     buttons += `<button class="ctlbtn" id="upd-token" title="Store a GitHub token so the app can read the private repository's releases">${icon('key')} ${u.hasToken ? 'Replace token' : 'Add token'}</button>`;
@@ -418,6 +418,7 @@ function updatePanel() {
   const notes = (u.status === 'available' || u.status === 'downloaded') && u.releaseNotes
     ? `<div style="margin-top:8px;padding:10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;max-height:150px;overflow:auto;white-space:pre-wrap;font-size:11px;line-height:1.55;color:var(--muted)">${esc(u.releaseNotes)}</div>`
     : '';
+  const autoBtn = `<button class="ctlbtn ${u.autoUpdate !== false ? 'on' : ''}" id="t-autoUpdate" title="${u.autoUpdate !== false ? 'Auto-update is on: new releases download in the background and install silently when the app closes' : 'Auto-update is off: nothing is downloaded or installed until you press the buttons'}">${icon('refresh')} Auto-update</button>`;
   const devNote = u.packaged === false
     ? '<div style="color:var(--muted);font-size:11px;margin-top:6px">Running from source: version checks work, but installing an update needs the packaged app.</div>'
     : '';
@@ -425,7 +426,7 @@ function updatePanel() {
   return `<div class="svcgroup" id="updates-panel">
     <div class="head"><span class="name">Updates</span>
       <span class="policy">version ${esc(cur)}${u.latestVersion && u.latestVersion !== cur ? ` · latest ${esc(u.latestVersion)}` : ''}</span></div>
-    <div class="sub" style="margin-bottom:0">${buttons}<span>${line}</span></div>
+    <div class="sub" style="margin-bottom:0">${autoBtn}${buttons}<span>${line}</span></div>
     ${notes}${devNote}
   </div>`;
 }
@@ -478,6 +479,12 @@ $home.addEventListener('change', async e => {
 $home.addEventListener('click', async e => {
   const refresh = e.target.closest('#refresh-status');
   if (refresh) { refresh.disabled = true; await window.api.refreshAllStatus().catch(() => {}); refresh.disabled = false; return; }
+  const autoBtn = e.target.closest('#t-autoUpdate');
+  if (autoBtn) {
+    const cur = !(updateState && updateState.autoUpdate === false);
+    window.api.setContentSetting('autoUpdate', !cur).then(v => { updateState = Object.assign({}, updateState, { autoUpdate: v }); renderHome(); }).catch(() => {});
+    return;
+  }
   const updBtn = e.target.closest('#upd-check, #upd-download, #upd-install, #upd-open, #upd-token');
   if (updBtn) {
     try {

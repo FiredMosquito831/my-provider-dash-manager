@@ -46,14 +46,14 @@ Start Menu and Desktop shortcuts. Your accounts, sessions and saved logins live 
 
 Three ways, all ending in the same place:
 
-- **Inside the app.** The version is always shown bottom-left in the rail. When a newer release
-  exists it turns into an **Update x.y.z** button; click it to open the Updates panel on Home, which
-  shows the release notes and offers **Download** and **Restart & install** with progress. The app
-  checks quietly on startup and once an hour after that. Nothing is downloaded or installed until you
-  press the button.
+- **Automatically, inside the app (default).** The app checks on startup and hourly. A newer release
+  downloads in the background and installs silently, with no wizard, the next time you close the app;
+  the rail badge bottom-left turns into **Restart to update x.y.z** if you would rather do it now.
+  Turn **Auto-update** off in the Updates panel on Home and every step waits for a button press
+  instead (Check, Download, Restart & update), with release notes and progress shown.
 - **From the command line.** `npx my-provider-dash-manager` (or `mpdm update` if installed globally)
-  installs the newest release over the current one. Close the app first, or the running copy keeps
-  showing the old version until you restart it.
+  updates an existing install silently and in place; add `--interactive` if you want the wizard.
+  Close the app first, or the running copy keeps showing the old version until you restart it.
 - **From the release page.** Run the newest installer; it upgrades in place.
 
 The repository is public, so updates need no token or account.
@@ -72,7 +72,7 @@ and it is also available as `mpdm`:
 | `… where` | Print the install and data paths |
 | `… uninstall` | Run the uninstaller (accounts and sessions are kept) |
 
-Flags: `--silent` (no wizard), `--download-only`, `--force`, `--version`, `--help`.
+Flags: `--silent` (no wizard on a first install), `--interactive` (wizard for an update), `--download-only`, `--force`, `--version`, `--help`.
 From a checkout of this repository the equivalent is `npm run install:latest`.
 
 ### Run from source
@@ -189,10 +189,13 @@ The token field says which credential each service expects. Tokens are validated
 encrypted with DPAPI, revocable in one click, and never leave the main process.
 
 ### Updates
-- Version always visible in the rail; an **Update** button appears when a newer release exists.
-- Updates panel on Home: installed vs latest, release notes, Check / Download / Restart & install with
-  progress. Nothing installs itself.
-- Startup and hourly checks against the public release feed.
+- **Silent in-place updates** by default: downloaded in the background, installed without a wizard
+  when the app closes or on **Restart & update**, relaunched on the new version.
+- **Auto-update toggle** for people who want to press every button themselves.
+- Version always visible in the rail; it becomes **Update x.y.z** / **Restart to update** as the
+  release moves through found → downloaded.
+- Updates panel on Home: installed vs latest, release notes, progress. Startup and hourly checks
+  against the public release feed. The interactive installer is only for first installs.
 
 ### Content
 - **Ad-blocking** driven by EasyList (~52,000 blocked hosts plus generic cosmetic rules, refreshed
@@ -248,7 +251,7 @@ npm run smoke:restore  # sessions survive a restart (real cookies)
 npm run smoke:tokens   # DPAPI round-trip + live fake-token rejection per provider (15)
 npm run smoke:creds    # import, per-account recall, encryption at rest (7)
 npm run smoke:autofill # real page: form detection, fill, capture, origin guard (10)
-npm run smoke:updates  # version comparison + real release-feed check (8)
+npm run smoke:updates  # version comparison, silent-install mode, auto-update toggle, real release-feed check (11)
 npm run smoke:services # every built-in login page loads inside an isolated partition (42)
 npm run capture        # screenshot the running shell (--capture-out, --capture-open svc::id, --capture-js)
 npm run spike          # memory benchmark
@@ -258,7 +261,7 @@ npm start -- --print-paths            # show the app name, version and data fold
 npm start -- --open vercel::personal  # open an account on launch
 ```
 
-The suite is 108 checks across seven modes. `MAM_USER_DATA=<dir>` points any command at an isolated
+The suite is 111 checks across seven modes. `MAM_USER_DATA=<dir>` points any command at an isolated
 profile.
 
 Releases are cut by pushing a `v*` tag: GitHub Actions checks the tag against `package.json`, builds

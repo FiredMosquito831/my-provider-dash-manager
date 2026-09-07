@@ -1,5 +1,8 @@
 // Update system: version tracking against the latest GitHub release, release information, and
-// explicit user-driven download/install (nothing is downloaded or installed behind your back).
+// in-place updates. With auto-update on (default) a newer release is downloaded in the background and
+// installed silently (NSIS /S) either when the app quits or when the user presses "Restart & update" —
+// the interactive installer wizard is only ever seen on a first install. Auto-update can be turned off,
+// in which case every step waits for a button press.
 //
 // Packaged builds use electron-updater (real download + install). Unpackaged dev runs still do a
 // real version check against the GitHub releases API so the UI is testable and honest about what it
@@ -45,10 +48,26 @@ const state = {
   packaged: false,
   canDownload: false,       // only packaged builds can actually install an update
   hasToken: false,          // a stored GitHub token (needed while the repo is private)
+  autoUpdate: true,         // download automatically, install silently on quit / on "Restart & update"
 };
 
 let notify = () => {};
 let autoUpdater = null;
+let autoUpdate = true; // mirrors settings.autoUpdate
+
+// How the installer is invoked for an in-place update: silently, and relaunch afterwards.
+// (A first install still goes through the interactive wizard — that is the CLI / release page path.)
+const INSTALL_MODE = { isSilent: true, isForceRunAfter: true };
+
+function setAutoUpdate(on) {
+  autoUpdate = !!on;
+  if (autoUpdater) autoUpdater.autoDownload = autoUpdate;
+  state.autoUpdate = autoUpdate;
+  notify(snapshot());
+  // if an update is already known and we just switched auto on, fetch it now
+  if (autoUpdate && state.status === 'available' && autoUpdater) download().catch(() => {});
+  return autoUpdate;
+}
 
 function snapshot() { return { ...state }; }
 function push(patch) {
@@ -68,8 +87,9 @@ function isNewer(a, b) {
   return false;
 }
 
-function init(onChange) {
+function init(onChange, opts = {}) {
   notify = onChange || (() => {});
+  if (typeof opts.autoUpdate === 'boolean') { autoUpdate = opts.autoUpdate; state.autoUpdate = autoUpdate; }
   state.currentVersion = app.getVersion();
   state.packaged = app.isPackaged;
   state.canDownload = app.isPackaged;
@@ -79,8 +99,8 @@ function init(onChange) {
 
   try {
     autoUpdater = require('electron-updater').autoUpdater;
-    autoUpdater.autoDownload = false;          // the user presses the button, not us
-    autoUpdater.autoInstallOnAppQuit = true;   // once downloaded, install on the next quit
+    autoUpdater.autoDownload = autoUpdate;     // auto-update on: fetch in the background; off: the user presses Download
+    autoUpdater.autoInstallOnAppQuit = true;   // a downloaded update installs silently (/S) on the next quit
     autoUpdater.on('checking-for-update', () => push({ status: 'checking', error: null }));
     autoUpdater.on('update-available', info => push({
       status: 'available',
@@ -187,8 +207,9 @@ async function download() {
 function install() {
   if (!autoUpdater) throw new Error('Nothing to install — this is a dev run.');
   if (state.status !== 'downloaded') throw new Error('The update has not finished downloading yet.');
-  setImmediate(() => autoUpdater.quitAndInstall(false, true)); // let the IPC reply return first
+  // silent NSIS install (/S) and relaunch — no wizard for an update that is already installed
+  setImmediate(() => autoUpdater.quitAndInstall(INSTALL_MODE.isSilent, INSTALL_MODE.isForceRunAfter)); // let the IPC reply return first
   return true;
 }
 
-module.exports = { init, check, download, install, snapshot, isNewer, setToken, getToken, REPO };
+module.exports = { init, check, download, install, snapshot, isNewer, setToken, getToken, setAutoUpdate, INSTALL_MODE, REPO };
