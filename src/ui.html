@@ -36,7 +36,7 @@
     .filterwrap { position:relative; display:flex; align-items:center; }
     .filterwrap svg { position:absolute; left:7px; color:var(--muted); pointer-events:none; }
 
-    #tabs { display:flex; align-items:center; gap:var(--s1); flex:1; overflow-x:auto; overflow-y:hidden; height:100%; }
+    #tabs { display:flex; align-items:center; gap:var(--s1); flex:1 1 0; min-width:0; overflow-x:auto; overflow-y:hidden; height:100%; }
     #tabs::-webkit-scrollbar { height:0; }
     .tabgroup { display:flex; align-items:center; gap:var(--s1); padding-left:var(--s2); flex:none;
                 border-left:1px solid var(--border); height:30px; }
@@ -56,7 +56,7 @@
             border:0; background:transparent; color:var(--muted); padding:0; }
     .tabx:hover { background:#0006; color:var(--danger); }
     .tabx svg { width:12px; height:12px; }
-    #right { flex:none; display:flex; align-items:center; gap:var(--s2); }
+    #right { flex:none; display:flex; align-items:center; gap:var(--s2); padding-left:var(--s2); }
     #mem { color:var(--muted); font-variant-numeric:tabular-nums; font-size:12px; }
 
     /* ---------- body: left rail + content ---------- */

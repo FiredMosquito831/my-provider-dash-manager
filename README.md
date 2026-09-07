@@ -9,6 +9,31 @@ session, and switch between them instantly — the way a browser handles tabs, b
 
 ---
 
+## What it looks like
+
+**Home — every service and account in one grid, with the account rail on the left.**
+Each provider lists its accounts; hovering one reveals open / sleep / close / fill-login / connect-token / manage.
+
+![Home screen](docs/screenshots/home.png)
+
+**A real dashboard, signed in, inside the app.** The rail and tab strip stay put, so Home is always one click away.
+
+![A dashboard open in the app](docs/screenshots/dashboard.png)
+
+**The top bar is only your open tabs** — filter them, or group them by provider with collapsible sections.
+Slept tabs stay in the strip (dimmed) and resume on click.
+
+![Tabs grouped by provider](docs/screenshots/tabs-grouped.png)
+
+**Updates and saved logins live on Home**: installed vs latest version with release notes and an update
+button, plus login remembering, auto-fill and password import.
+
+![Updates and saved logins](docs/screenshots/settings.png)
+
+<sub>Screenshots use a demo profile with placeholder account names.</sub>
+
+---
+
 ## Why it exists
 
 Every cloud provider assumes you have exactly one identity. The moment you have a personal account

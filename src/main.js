@@ -758,11 +758,31 @@ function runInteractive(captureMode = false) {
   };
   win.once('ready-to-show', () => { applyBounds(); if (!captureMode) win.show(); });
   if (captureMode) {
+    // Screenshot options (used to produce the README images):
+    //   --capture-out <file>     where to write the PNG (default ui-screenshot.png)
+    //   --capture-open <svc::id> open this account tab before shooting
+    //   --capture-scroll <px>    scroll the Home grid down first
+    //   --capture-wait <ms>      extra settle time
+    //   --capture-js "<expr>"    run an expression in the chrome page (e.g. open a modal)
+    const argVal = name => { const i = process.argv.indexOf(name); return i > -1 ? process.argv[i + 1] : null; };
+    const outFile = argVal('--capture-out') || 'ui-screenshot.png';
+    const openKey = argVal('--capture-open');
+    const scrollPx = Number(argVal('--capture-scroll') || 0);
+    const extraWait = Number(argVal('--capture-wait') || 0);
+    const runJs = argVal('--capture-js');
     win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
       console.log(`[renderer:${level}] ${message} (${path.basename(String(sourceId))}:${line})`);
     });
     win.webContents.once('did-finish-load', () => {
       setTimeout(async () => {
+        if (openKey) {
+          const [svc, id] = openKey.split('::');
+          vm.create(svc, id, (serviceByKey(svc) || {}).dashboardUrl);
+          await new Promise(r => setTimeout(r, Number(argVal('--capture-open-wait') || 20000))); // let the real dashboard paint
+        }
+        if (scrollPx) await win.webContents.executeJavaScript(`document.getElementById('home').scrollTop = ${scrollPx}`).catch(() => {});
+        if (runJs) await win.webContents.executeJavaScript(runJs).catch(err => console.error('[capture] js failed:', err.message));
+        if (extraWait) await new Promise(r => setTimeout(r, extraWait));
         // UnknownVizError / empty frames clear once the compositor produces a frame — retry
         let img = null; let lastErr = null;
         for (let i = 0; i < 10 && !img; i++) {
@@ -789,8 +809,31 @@ function runInteractive(captureMode = false) {
           console.log('[capture] state:', dockInfo);
         } catch (err) { console.error('[capture] state probe failed:', err.message); }
         if (img) {
-          fs.writeFileSync(path.join(__dirname, '..', 'ui-screenshot.png'), img.toPNG());
-          console.log('[capture] saved ui-screenshot.png', JSON.stringify(img.getSize()));
+          const target = path.isAbsolute(outFile) ? outFile : path.join(__dirname, '..', outFile);
+          fs.mkdirSync(path.dirname(target), { recursive: true });
+          fs.writeFileSync(target, img.toPNG());
+          console.log(`[capture] saved ${outFile}`, JSON.stringify(img.getSize()));
+          // The active account view is a NATIVE child view: it is absent from the window capture and
+          // from PrintWindow. Save it separately so it can be composited at (RAIL_W, TAB_STRIP_H).
+          const act = vm.activeKey && vm.tabs.get(vm.activeKey);
+          if (act) {
+            // same UnknownVizError/empty-frame retry as the window capture
+            let vimg = null; let vErr = null;
+            for (let i = 0; i < 12 && !vimg; i++) {
+              try {
+                const cand = await act.view.webContents.capturePage();
+                if (!cand.isEmpty()) vimg = cand;
+              } catch (err) { vErr = err; }
+              if (!vimg) await new Promise(r => setTimeout(r, 1000));
+            }
+            if (vimg) {
+              const vpath = target.replace(/\.png$/i, '.view.png');
+              fs.writeFileSync(vpath, vimg.toPNG());
+              console.log(`[capture] saved view layer ${path.basename(vpath)}`, JSON.stringify(vimg.getSize()), `offset=${RAIL_W},${TAB_STRIP_H}`);
+            } else {
+              console.error('[capture] view layer failed:', vErr ? vErr.message : 'empty frames');
+            }
+          }
         } else {
           console.error('[capture] failed after retries:', lastErr ? lastErr.message : 'empty frames');
         }
@@ -828,6 +871,13 @@ function runInteractive(captureMode = false) {
       vm.sessionRestored = true;
       const n = vm.restoreSession(); // bring back the tabs that were open at exit
       if (n) console.log(`[session] restored ${n} live tab(s) of ${vm.session.length} remembered`);
+      // --open <svc::id>: open and focus one account at startup (demos, screenshots, shortcuts)
+      const oi = process.argv.indexOf('--open');
+      if (oi > -1 && process.argv[oi + 1]) {
+        const [svc, id] = String(process.argv[oi + 1]).split('::');
+        const service = serviceByKey(svc);
+        if (service) vm.create(svc, id, service.dashboardUrl);
+      }
     }
     vm.emitState();
   });
