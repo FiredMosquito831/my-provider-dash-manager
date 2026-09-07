@@ -2,6 +2,13 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.6.1 — 2026-09-07
+
+### Added
+- **Version badge in the rail footer.** The installed version is always visible bottom-left; when a
+  newer release exists it turns into an "Update X.Y.Z" button. Clicking it jumps to the Updates panel
+  on Home (which previously sat below the fold once you had a few accounts).
+
 ## 0.6.0 — 2026-09-07
 
 ### Added

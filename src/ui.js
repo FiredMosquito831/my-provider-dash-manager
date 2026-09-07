@@ -204,9 +204,13 @@ function renderRail() {
     <button class="ctlbtn" id="add-service" style="width:100%;justify-content:center;margin-top:6px"
       title="Add any web service by URL">${icon('plus')} Add service by URL</button>`;
 
+  const u = updateState || {};
+  const newer = ['available', 'downloading', 'downloaded'].includes(u.status);
   $railFoot.innerHTML = `
     <button class="ctlbtn" id="rail-refresh" title="Re-fetch API status for connected accounts">${icon('refresh')} Status</button>
-    <button class="ctlbtn" id="rail-sleep" title="Sleep all tabs — they stay in the strip">${icon('moon')} Sleep</button>`;
+    <button class="ctlbtn" id="rail-sleep" title="Sleep all tabs — they stay in the strip">${icon('moon')} Sleep</button>
+    <button class="ctlbtn ${newer ? 'on' : ''}" id="rail-ver" title="${newer ? `Version ${esc(u.latestVersion)} is available — open the Updates panel` : 'Installed version — open the Updates panel'}">
+      ${icon(newer ? 'download' : 'spark')} ${newer ? `Update ${esc(u.latestVersion)}` : `v${esc(u.currentVersion || '')}`}</button>`;
 }
 
 function acctRow(a) {
@@ -240,6 +244,12 @@ $railTop.addEventListener('click', async () => {
 
 $railFoot.addEventListener('click', async e => {
   if (e.target.closest('#rail-sleep')) { window.api.sleepAll(); return; }
+  if (e.target.closest('#rail-ver')) { // jump to the Updates panel, wherever Home is scrolled to
+    if (state.activeKey !== null) await window.api.showHome();
+    const el = document.getElementById('updates-panel');
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1200); }
+    return;
+  }
   const r = e.target.closest('#rail-refresh');
   if (r) { r.disabled = true; await window.api.refreshAllStatus().catch(() => {}); r.disabled = false; }
 });
@@ -412,7 +422,7 @@ function updatePanel() {
     ? '<div style="color:var(--muted);font-size:11px;margin-top:6px">Running from source: version checks work, but installing an update needs the packaged app.</div>'
     : '';
 
-  return `<div class="svcgroup">
+  return `<div class="svcgroup" id="updates-panel">
     <div class="head"><span class="name">Updates</span>
       <span class="policy">version ${esc(cur)}${u.latestVersion && u.latestVersion !== cur ? ` · latest ${esc(u.latestVersion)}` : ''}</span></div>
     <div class="sub" style="margin-bottom:0">${buttons}<span>${line}</span></div>
@@ -777,7 +787,7 @@ pollMemory();
 
 function renderAll() { renderTabCtl(); renderTabs(); renderRail(); renderHome(); }
 
-window.api.onUpdateState(s => { updateState = s; if (state.activeKey === null) renderHome(); });
+window.api.onUpdateState(s => { updateState = s; renderRail(); if (state.activeKey === null) renderHome(); });
 
 window.api.onTabsState(s => {
   const prevFocus = document.activeElement && document.activeElement.id;
