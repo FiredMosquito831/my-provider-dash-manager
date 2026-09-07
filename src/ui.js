@@ -141,11 +141,13 @@ function renderRail() {
         <span class="pname">${esc(s.name)}</span>
         <span class="count">${openCount ? `${openCount}/${accs.length}` : accs.length || ''}</span>
         <button class="provadd" data-add="${esc(s.key)}" title="Add a ${esc(s.name)} account" aria-label="Add account">${icon('plus')}</button>
+        ${s.custom ? `<button class="provadd" data-rmsvc="${esc(s.key)}" title="Remove this custom service" aria-label="Remove service">${icon('x')}</button>` : ''}
       </div>
       ${collapsed ? '' : (accs.length ? accs.map(a => acctRow(a)).join('')
         : `<div class="emptyhint">No accounts yet</div>`)}
     </div>`;
-  }).join('');
+  }).join('') + `<button class="ctlbtn" id="add-service" style="width:100%;justify-content:center;margin-top:8px"
+      title="Add any web service by URL">${icon('plus')} Add service</button>`;
 
   $railFoot.innerHTML = `
     <button class="ctlbtn" id="rail-refresh" title="Re-fetch API status for connected accounts">${icon('refresh')} Status</button>
@@ -186,6 +188,16 @@ $railFoot.addEventListener('click', async e => {
 });
 
 $railScroll.addEventListener('click', async e => {
+  if (e.target.closest('#add-service')) { openAddServiceModal(); return; }
+  const rm = e.target.closest('[data-rmsvc]');
+  if (rm) {
+    e.stopPropagation();
+    const key = rm.getAttribute('data-rmsvc');
+    if (confirm(`Remove the custom service "${svcOf(key).name}"?`)) {
+      try { await window.api.removeService(key); } catch (err) { alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); }
+    }
+    return;
+  }
   const add = e.target.closest('[data-add]');
   if (add) { e.stopPropagation(); openAddModal(add.getAttribute('data-add')); return; }
   const sleep = e.target.closest('[data-sleep]');
@@ -335,6 +347,31 @@ async function doAdd(svc, mode) {
   }
 }
 
+function openAddServiceModal() {
+  $modal.innerHTML = `
+    <h3>Add a service</h3>
+    <label>Name</label>
+    <input type="text" id="s-name" placeholder="e.g. Fly.io" />
+    <label>Dashboard or login URL</label>
+    <input type="text" id="s-url" placeholder="https://fly.io/dashboard" />
+    <div id="m-error" style="color:var(--danger);font-size:11px;margin-top:8px"></div>
+    <div class="row"><button class="btn-primary" id="s-add">Add service</button><button class="btn-plain" id="m-cancel">Cancel</button></div>
+    <div class="note">Any web service works — it gets its own row in the rail, and each account you add under it gets a fully isolated, persistent session just like the built-in providers.</div>`;
+  $modalBack.hidden = false;
+  window.api.setModalOpen(true);
+  $modal.querySelector('#m-cancel').onclick = closeModal;
+  $modal.querySelector('#s-add').onclick = async () => {
+    const box = $modal.querySelector('#m-error');
+    try {
+      await window.api.addService({ name: $modal.querySelector('#s-name').value, url: $modal.querySelector('#s-url').value });
+      closeModal();
+    } catch (err) {
+      box.textContent = String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    }
+  };
+  $modal.querySelector('#s-name').focus();
+}
+
 function openEditModal(key, focusToken = false) {
   const [svc, id] = key.split('::');
   const acc = registry.find(a => a.svc === svc && a.id === id);
@@ -420,6 +457,7 @@ window.api.onTabsState(s => {
   const prevFocus = document.activeElement && document.activeElement.id;
   state = Object.assign(state, s);
   if (s.registry) registry = s.registry;
+  if (s.services) services = s.services; // keeps user-added services in sync
   renderAll();
   if (prevFocus === 'filter') { const f = document.getElementById('filter'); if (f) { f.focus(); f.selectionStart = f.value.length; } }
 });

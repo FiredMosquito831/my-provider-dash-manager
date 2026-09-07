@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('api', {
   toggleCollapsed: svc => ipcRenderer.invoke('toggle-collapsed', svc),
   setContentSetting: (name, value) => ipcRenderer.invoke('set-content-setting', name, value),
   contentStats: () => ipcRenderer.invoke('content-stats'),
+  addService: opts => ipcRenderer.invoke('add-service', opts),
+  removeService: key => ipcRenderer.invoke('remove-service', key),
   updateAccount: (svc, id, patch) => ipcRenderer.invoke('update-account', svc, id, patch),
   deleteAccount: (svc, id) => ipcRenderer.invoke('delete-account', svc, id),
   memory: () => ipcRenderer.invoke('memory'),

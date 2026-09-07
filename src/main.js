@@ -31,18 +31,25 @@ const store = {
   accounts: [], // {svc, id, label, colorIdx, proxy, createdAt, lastState}
   settings: { warmLimit: 5, groupTabs: false, collapsed: [], adBlock: true, darkMode: true, forceDark: false },
   openTabs: [], // session memory: [{svc, id, url, lastActivated, active}] — survives restarts
+  customServices: [], // Phase 2: user-added services {key,name,dashboardUrl,loginUrl,color,custom:true}
   save() {
     writeJson(userDataPath('accounts.json'), this.accounts);
     writeJson(userDataPath('settings.json'), this.settings);
+    writeJson(userDataPath('services.json'), this.customServices);
   },
   saveSession() { writeJson(userDataPath('session.json'), this.openTabs); },
   load() {
     this.accounts = readJson(userDataPath('accounts.json'), []);
     this.settings = Object.assign({ warmLimit: 5, groupTabs: false, collapsed: [], adBlock: true, darkMode: true, forceDark: false }, readJson(userDataPath('settings.json'), {}));
     this.openTabs = readJson(userDataPath('session.json'), []);
+    this.customServices = readJson(userDataPath('services.json'), []);
   },
 };
 function userData(name) { return userDataPath(name); }
+
+// Phase 2: built-in curated services plus user-added generic ones (any URL).
+function allServices() { return [...SERVICES, ...(store.customServices || [])]; }
+function serviceByKey(key) { return allServices().find(s => s.key === key); }
 
 function sanitizeId(name) {
   return String(name).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'acc';
@@ -170,7 +177,7 @@ class ViewManager {
     const { show = true, label = null } = opts;
     const key = accountKey(svc, id);
     if (this.tabs.has(key)) { if (show) this.activate(key); return key; }
-    const service = SERVICES.find(s => s.key === svc);
+    const service = serviceByKey(svc);
     registerAccount(svc, id, label || id);
     const acc = findAccount(svc, id);
     const view = this.makeView(svc, id);
@@ -332,6 +339,7 @@ class ViewManager {
       collapsed: store.settings.collapsed || [],
       settings: { ...store.settings },
       blocked: content.stats.blocked,
+      services: allServices(), // includes user-added services so the renderer stays in sync
       // the strip shows the whole remembered open set: live tabs AND slept ones (resume on click)
       tabs: this.session.map(s => {
         const k = accountKey(s.svc, s.id);
@@ -625,7 +633,7 @@ function runInteractive(captureMode = false) {
     }
     vm.emitState();
   });
-  ipcMain.handle('list-services', () => SERVICES);
+  ipcMain.handle('list-services', () => allServices());
   ipcMain.handle('registry-list', () => store.accounts.map(a => ({ ...a, key: accountKey(a.svc, a.id) })));
   ipcMain.handle('get-settings', () => store.settings);
   ipcMain.handle('set-warm-limit', (_e, n) => {
@@ -636,7 +644,7 @@ function runInteractive(captureMode = false) {
     return store.settings.warmLimit;
   });
   ipcMain.handle('add-account', (_e, svc, opts = {}) => {
-    const service = SERVICES.find(s => s.key === svc);
+    const service = serviceByKey(svc);
     if (!service) throw new Error(`unknown service: ${svc}`);
     const { id, label, mode } = opts;
     let cleanId = sanitizeId(id || `a${store.accounts.filter(a => a.svc === svc).length + 1}`);
@@ -650,7 +658,7 @@ function runInteractive(captureMode = false) {
     const key = accountKey(svc, id);
     if (!vm.tabs.has(key)) {
       if (!findAccount(svc, id)) return null; // never resurrect a deleted account from a stale UI click
-      const service = SERVICES.find(s => s.key === svc);
+      const service = serviceByKey(svc);
       vm.create(svc, id, service.dashboardUrl);
     } else vm.activate(key);
     return key;
@@ -672,6 +680,35 @@ function runInteractive(captureMode = false) {
     return true;
   });
   ipcMain.handle('close-tab', (_e, key) => vm.closeTab(key));
+  // ---------- Phase 2: user-added generic services (any URL) ----------
+  ipcMain.handle('add-service', (_e, { name, url }) => {
+    const clean = String(name || '').trim();
+    if (!clean) throw new Error('Name is required');
+    let parsed;
+    try { parsed = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`); } catch { throw new Error('Enter a valid URL'); }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('Only http(s) URLs are supported');
+    let key = sanitizeId(clean);
+    if (serviceByKey(key)) { let n = 2; while (serviceByKey(`${key}-${n}`)) n++; key = `${key}-${n}`; }
+    const svc = {
+      key, name: clean.slice(0, 40),
+      dashboardUrl: parsed.href, loginUrl: parsed.href, signupUrl: parsed.href,
+      color: COLORS[(store.customServices.length + SERVICES.length) % COLORS.length],
+      multiAccountPolicy: 'ok', custom: true,
+    };
+    store.customServices.push(svc);
+    store.save();
+    vm.emitState();
+    return svc;
+  });
+  ipcMain.handle('remove-service', (_e, key) => {
+    const svc = (store.customServices || []).find(s => s.key === key);
+    if (!svc) throw new Error('Only user-added services can be removed');
+    if (store.accounts.some(a => a.svc === key)) throw new Error('Delete this service’s accounts first');
+    store.customServices = store.customServices.filter(s => s.key !== key);
+    store.save();
+    vm.emitState();
+    return true;
+  });
   ipcMain.handle('set-content-setting', (_e, name, value) => {
     if (!['adBlock', 'darkMode', 'forceDark'].includes(name)) throw new Error(`unknown setting: ${name}`);
     store.settings[name] = !!value;
