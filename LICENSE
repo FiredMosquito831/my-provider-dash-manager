@@ -1,0 +1,63 @@
+# My Provider Dash Manager — Licence
+
+Copyright © 2026 Eduard Secureanu (GitHub: [FiredMosquito831](https://github.com/FiredMosquito831)).
+All rights reserved.
+
+Source-available. You may **use** this software, personally and commercially. You may **not** modify
+it, redistribute changed versions, or present it as your own work.
+
+## 1. Permitted
+
+1. **Use, without charge, for any purpose — personal or commercial.** You may run the application on
+   any number of machines, including inside a company, and use it in the course of paid work.
+2. **Reading and studying the source**, including for security review.
+3. **Redistributing the software verbatim and unmodified**, keeping this licence and the attribution
+   below intact, provided you charge nothing for the software itself.
+4. **Private, local changes solely to make the software run in your own environment** (for example a
+   build fix). Such changes may not be published or distributed.
+
+## 2. Not permitted
+
+1. **Modifying the software** for distribution, or publishing modified or derivative versions, forks
+   with changes, ports, or rebrands.
+2. **Presenting the work, in whole or in part, as your own**, or removing or obscuring authorship,
+   copyright notices, or this licence.
+3. **Sublicensing, selling, or renting the software**, or including it in a paid product or service
+   offering where the software itself is what is being paid for.
+4. Using the author's name to endorse anything without written permission.
+
+## 3. Attribution
+
+If you mention, describe, review, demonstrate, publish about, or otherwise refer to this software
+anywhere — an article, video, README, documentation, presentation, social post, or product page —
+you must credit the author and link the project repository:
+
+> My Provider Dash Manager by FiredMosquito831 —
+> https://github.com/FiredMosquito831/my-provider-dash-manager
+
+## 4. Contributions
+
+Contributions are welcome only as issues, or as pull requests that the author may accept at their
+sole discretion. By submitting a contribution you assign to the author the rights necessary to
+license it under these terms.
+
+## 5. No warranty; no liability
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+The software manages sessions and credentials for third-party services. You are responsible for
+complying with those services' terms, and for the security of the machine it runs on.
+
+## 6. Termination
+
+Any breach of sections 1–3 terminates the rights granted here automatically. Rights are reinstated if
+the breach is corrected promptly after notice.
+
+---
+
+*This is a bespoke source-available licence, not an OSI-approved open-source licence: it deliberately
+withholds the right to modify and redistribute. Third-party dependencies keep their own licences.*

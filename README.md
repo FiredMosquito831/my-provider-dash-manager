@@ -216,4 +216,10 @@ update feed, and publishes the release.
 
 ## Licence
 
-Not yet licensed — all rights reserved by the author.
+Source-available, © 2026 FiredMosquito831 — see [LICENSE](LICENSE).
+
+**Free to use, personally and commercially.** You may not modify or redistribute changed versions, or
+present the work as your own. If you mention the app anywhere, credit the author and link this repo:
+
+> My Provider Dash Manager by FiredMosquito831 —
+> https://github.com/FiredMosquito831/my-provider-dash-manager
