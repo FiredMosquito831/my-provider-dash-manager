@@ -2,6 +2,23 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.2.3 — 2026-09-07
+
+### Added
+- **Update system with a real UI.** Home now has an Updates panel showing the installed version, the
+  latest released version, the release notes, and when it last checked. Buttons: *Check for updates*,
+  *Download <version>*, and *Restart & install*, with live download progress. Nothing downloads or
+  installs on its own (`autoDownload` is off) — previously the app only fired a silent OS notification
+  with no in-app surface at all.
+- **Private-repository support for updates.** The release repo is private, so the release feed is not
+  readable anonymously; the panel explains this and lets you store a GitHub token (encrypted with
+  DPAPI, read access is enough) which is used for both the version check and the download. Setting
+  `GH_TOKEN` in the environment works too. Making the repository public removes the need entirely.
+- Version checks work when running from source as well (straight against the GitHub releases API), with
+  the UI stating plainly that installing an update requires the packaged build.
+- `npm run smoke:updates`: 9 checks covering version comparison, dev-mode capabilities, and a real
+  release-feed check with an actionable error.
+
 ## 0.2.2 — 2026-09-07
 
 Security and correctness release: a 30-agent adversarial review confirmed 22 findings against the

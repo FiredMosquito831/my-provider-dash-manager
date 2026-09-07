@@ -1,6 +1,6 @@
 {
   "name": "multi-acc-manager",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Multi-account manager for Vercel/Netlify/Supabase-style dashboards",
   "main": "src/main.js",
   "scripts": {
@@ -14,7 +14,8 @@
     "smoke:creds": "electron . --smoke-creds",
     "smoke:autofill": "electron . --smoke-autofill",
     "internal:save": "git --git-dir=.internal-git --work-tree=. add -f CLAUDE.md PROJECT.md docs/WORKLOG.md docs/LEARNINGS.md docs/BACKLOG.md docs/DECISIONS.md docs/AUDIT-*.md && git --git-dir=.internal-git --work-tree=. commit -m \"internal artifacts snapshot\"",
-    "internal:log": "git --git-dir=.internal-git --work-tree=. log --oneline"
+    "internal:log": "git --git-dir=.internal-git --work-tree=. log --oneline",
+    "smoke:updates": "electron . --smoke-updates"
   },
   "devDependencies": {
     "electron": "^43.0.0",

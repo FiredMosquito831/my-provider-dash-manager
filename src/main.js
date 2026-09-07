@@ -7,6 +7,7 @@ const { PROVIDERS } = require('./providers');
 const content = require('./content');
 const creds = require('./credentials');
 const plugins = require('./plugins');
+const updater = require('./updater');
 
 const statusCache = new Map(); // accountKey -> { summary?, error?, fetchedAt } — summaries only, tokens never leave main
 
@@ -672,6 +673,31 @@ async function runSmokeAutofill() {
   app.exit(results.checks.every(c => c.ok) ? 0 : 1);
 }
 
+// ---------- smoke updates: version comparison + real release-feed check ----------
+async function runSmokeUpdates() {
+  const results = { mode: 'updates', checks: [] };
+  const check = (name, ok, detail = '') => { results.checks.push({ name, ok, detail }); console.log(`[smoke:updates] ${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`); };
+
+  check('newer-detects-patch', updater.isNewer('0.2.1', '0.2.2'));
+  check('newer-detects-minor', updater.isNewer('0.2.9', '0.3.0'));
+  check('newer-handles-double-digits', updater.isNewer('0.2.9', '0.2.10'));
+  check('not-newer-when-same', !updater.isNewer('0.2.2', '0.2.2'));
+  check('not-newer-when-older', !updater.isNewer('0.3.0', '0.2.9'));
+
+  const init = updater.init(() => {});
+  check('reports-current-version', init.currentVersion === app.getVersion(), init.currentVersion);
+  check('knows-it-cannot-install-in-dev', init.canDownload === false && init.packaged === false);
+
+  const s = await updater.check();
+  check('check-completes-with-a-verdict', ['available', 'up-to-date', 'error'].includes(s.status), `status=${s.status}`);
+  console.log(`[smoke:updates] INFO latest=${s.latestVersion || 'n/a'} error=${s.error || 'none'}`);
+  // A private repo returns 404 unauthenticated — the message must say so rather than being cryptic.
+  if (s.status === 'error') check('error-is-actionable', /private|release|network|token/i.test(s.error || ''), s.error);
+
+  fs.writeFileSync(path.join(__dirname, '..', 'smoke-report.json'), JSON.stringify(results, null, 2));
+  app.exit(results.checks.every(c => c.ok) ? 0 : 1);
+}
+
 // ---------- smoke restore: app restart, verify partitions persisted ----------
 async function runSmokeRestore() {
   const win = new BaseWindow({ width: 1280, height: 800, show: false });
@@ -720,14 +746,11 @@ function runInteractive(captureMode = false) {
   content.setNativeDark(!!store.settings.darkMode); // sites with their own dark theme follow it
   content.loadFilters().then(src => console.log(`[adblock] filters from ${src}: ${content.filters.hosts.size} hosts, ${content.filters.cosmetic.length} cosmetic`));
   win.loadFile(path.join(__dirname, 'ui.html'));
-  // auto-update (packaged builds only; releases are published by the GitHub Actions tag workflow)
-  if (app.isPackaged) {
-    try {
-      const { autoUpdater } = require('electron-updater');
-      autoUpdater.checkForUpdatesAndNotify().catch(err => console.error('auto-update check failed:', err.message));
-      setInterval(() => autoUpdater.checkForUpdatesAndNotify().catch(() => {}), 4 * 60 * 60 * 1000);
-    } catch (err) { console.error('auto-update unavailable:', err.message); }
-  }
+  // Update system: version tracking + release info + explicit user-driven download/install.
+  // Nothing downloads or installs on its own; the UI shows what is available and you decide.
+  updater.init(s => { if (win && win.webContents && !win.webContents.isDestroyed()) win.webContents.send('update-state', s); });
+  updater.check().catch(() => {});                                     // one check at startup
+  setInterval(() => updater.check().catch(() => {}), 4 * 60 * 60 * 1000); // and every 4 hours
   const applyBounds = () => {
     const [w, h] = win.getContentSize();
     // reserve the left rail: account views start after it, so the rail (and Home) is always reachable
@@ -760,6 +783,7 @@ function runInteractive(captureMode = false) {
               bodyClass: document.body.className,
               apiExists: typeof window.api !== 'undefined',
               cardCount: document.querySelectorAll('.card').length,
+              updatePanel: (() => { const h = [...document.querySelectorAll('.svcgroup .head .name')].find(n => n.textContent === 'Updates'); return h ? h.closest('.svcgroup').innerText.replace(/\\s+/g, ' ').slice(0, 160) : 'MISSING'; })(),
             });
           })()`);
           console.log('[capture] state:', dockInfo);
@@ -854,6 +878,17 @@ function runInteractive(captureMode = false) {
     return true;
   });
   ipcMain.handle('close-tab', (_e, key) => vm.closeTab(key));
+
+  // ---------- updates ----------
+  ipcMain.handle('update-state', () => updater.snapshot());
+  ipcMain.handle('update-check', () => updater.check());
+  ipcMain.handle('update-download', () => updater.download());
+  ipcMain.handle('update-install', () => updater.install());
+  ipcMain.handle('app-version', () => app.getVersion());
+  ipcMain.handle('update-set-token', async (_e, plain) => {
+    await updater.setToken(plain);
+    return updater.check();
+  });
 
   // ---------- saved logins: capture what you type, fill it back later ----------
   function tabForSender(senderWc) {
@@ -1111,7 +1146,7 @@ function cycleTab(vm, dir) {
 }
 
 // test modes default to an isolated userData: they can never pollute the real registry/partitions
-const TEST_FLAGS = ['--spike', '--smoke', '--smoke-restore', '--smoke-tokens', '--smoke-creds', '--smoke-autofill'];
+const TEST_FLAGS = ['--spike', '--smoke', '--smoke-restore', '--smoke-tokens', '--smoke-creds', '--smoke-autofill', '--smoke-updates'];
 const testFlag = TEST_FLAGS.find(f => process.argv.includes(f));
 if (testFlag && !process.env.MAM_USER_DATA) {
   const dirName = testFlag === '--smoke-restore' ? 'mam-test-smoke' : `mam-test-${testFlag.slice(2)}`;
@@ -1134,6 +1169,7 @@ if (!gotLock) {
     else if (process.argv.includes('--smoke-tokens')) runSmokeTokens().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke-creds')) runSmokeCreds().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke-autofill')) runSmokeAutofill().catch(err => { console.error(err); app.exit(1); });
+    else if (process.argv.includes('--smoke-updates')) runSmokeUpdates().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--capture')) runInteractive(true);
     else runInteractive();
   });

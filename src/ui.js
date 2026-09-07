@@ -3,6 +3,7 @@ let registry = [];
 let state = { activeKey: null, warmLimit: 5, tabs: [], groupTabs: false, collapsed: [] };
 let filterText = '';
 let credStats = null;
+let updateState = { status: 'idle', currentVersion: '' };
 
 const $tabctl = document.getElementById('tabctl');
 const $tabs = document.getElementById('tabs');
@@ -34,6 +35,7 @@ const ICONS = {
   contrast: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18Z" fill="currentColor" stroke="none"/>',
   key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.5 12.5 8-8"/><path d="m16 7 2.5 2.5"/><path d="m19 4 2 2"/>',
   download: '<path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/>',
+  spark: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
 };
 function icon(n) { return `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`; }
 
@@ -272,6 +274,7 @@ function renderHome() {
         </div>
       </div>`;
     }).join('')}
+    ${updatePanel()}
     <div class="svcgroup">
       <div class="head"><span class="name">Saved logins</span>
         <span class="policy">${(state.credCount != null ? state.credCount : (credStats ? credStats.total : 0))} stored · encrypted with Windows DPAPI</span></div>
@@ -284,6 +287,54 @@ function renderHome() {
       </div>
     </div>`;
   restoreHomeFocus(keepValue); // re-renders no longer kick you out of the warm-limit field
+}
+
+function fmtBytes(n) {
+  if (!n && n !== 0) return '';
+  const mb = n / (1024 * 1024);
+  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
+}
+
+function updatePanel() {
+  const u = updateState || {};
+  const cur = u.currentVersion || '';
+  let line = '';
+  let buttons = `<button class="ctlbtn" id="upd-check" title="Check GitHub for a newer release">${icon('refresh')} Check for updates</button>`;
+
+  if (u.status === 'checking') line = 'Checking for updates…';
+  else if (u.status === 'up-to-date') line = `<span class="ok">You are on the latest version.</span>${u.lastChecked ? ` Checked ${new Date(u.lastChecked).toLocaleTimeString()}.` : ''}`;
+  else if (u.status === 'available') {
+    line = `<span class="warn">Version ${esc(u.latestVersion)} is available.</span>`;
+    buttons += u.canDownload
+      ? `<button class="ctlbtn on" id="upd-download" title="Download this update now">${icon('download')} Download ${esc(u.latestVersion)}</button>`
+      : `<button class="ctlbtn" id="upd-open" title="Open the release page">${icon('external')} View release</button>`;
+  } else if (u.status === 'downloading') {
+    const p = u.progress || {};
+    line = `Downloading ${esc(u.latestVersion || '')}… ${p.percent != null ? p.percent + '%' : ''} ${p.total ? `(${fmtBytes(p.transferred)} of ${fmtBytes(p.total)})` : ''}`;
+    buttons = '';
+  } else if (u.status === 'downloaded') {
+    line = `<span class="ok">Version ${esc(u.latestVersion)} is ready to install.</span>`;
+    buttons = `<button class="ctlbtn on" id="upd-install" title="Restart the app and install the update">${icon('spark')} Restart &amp; install</button>`;
+  } else if (u.status === 'error') {
+    line = `<span class="warn">${esc(u.error || 'Update check failed.')}</span>`;
+    buttons += `<button class="ctlbtn" id="upd-token" title="Store a GitHub token so the app can read the private repository's releases">${icon('key')} ${u.hasToken ? 'Replace token' : 'Add token'}</button>`;
+  } else if (u.status === 'unsupported') {
+    line = `<span class="warn">${esc(u.error || 'Updates are not available in this build.')}</span>`;
+  }
+
+  const notes = (u.status === 'available' || u.status === 'downloaded') && u.releaseNotes
+    ? `<div style="margin-top:8px;padding:10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;max-height:150px;overflow:auto;white-space:pre-wrap;font-size:11px;line-height:1.55;color:var(--muted)">${esc(u.releaseNotes)}</div>`
+    : '';
+  const devNote = u.packaged === false
+    ? '<div style="color:var(--muted);font-size:11px;margin-top:6px">Running from source: version checks work, but installing an update needs the packaged app.</div>'
+    : '';
+
+  return `<div class="svcgroup">
+    <div class="head"><span class="name">Updates</span>
+      <span class="policy">version ${esc(cur)}${u.latestVersion && u.latestVersion !== cur ? ` · latest ${esc(u.latestVersion)}` : ''}</span></div>
+    <div class="sub" style="margin-bottom:0">${buttons}<span>${line}</span></div>
+    ${notes}${devNote}
+  </div>`;
 }
 
 function cardHtml(svc, a) {
@@ -329,6 +380,20 @@ $home.addEventListener('change', async e => {
 $home.addEventListener('click', async e => {
   const refresh = e.target.closest('#refresh-status');
   if (refresh) { refresh.disabled = true; await window.api.refreshAllStatus().catch(() => {}); refresh.disabled = false; return; }
+  const updBtn = e.target.closest('#upd-check, #upd-download, #upd-install, #upd-open, #upd-token');
+  if (updBtn) {
+    try {
+      if (updBtn.id === 'upd-check') { updBtn.disabled = true; updateState = await window.api.updateCheck(); renderHome(); }
+      else if (updBtn.id === 'upd-download') { await window.api.updateDownload(); }
+      else if (updBtn.id === 'upd-install') { await window.api.updateInstall(); }
+      else if (updBtn.id === 'upd-open' && updateState.releaseUrl) { window.api.openExternal(updateState.releaseUrl); }
+      else if (updBtn.id === 'upd-token') { openUpdateTokenModal(); }
+    } catch (err) {
+      alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+      renderHome();
+    }
+    return;
+  }
   if (e.target.closest('#imp-browser')) { openImportModal(); return; }
   if (e.target.closest('#imp-csv')) {
     try {
@@ -429,6 +494,42 @@ async function openImportModal() {
       }
     };
   });
+}
+
+function openUpdateTokenModal() {
+  $modal.innerHTML = `
+    <h3>GitHub token for updates</h3>
+    <div class="note" style="margin-top:0">The release repository is private, so reading its releases needs a token.
+      Create a fine-grained token with <b>read access to this repository's contents</b> and paste it here — it is
+      encrypted with Windows DPAPI and used only to check for and download updates. Making the repository public
+      removes the need for a token entirely.</div>
+    <label>Token</label>
+    <input type="password" id="u-token" placeholder="github_pat_… or ghp_…" />
+    <div id="m-error" style="font-size:11px;margin-top:8px"></div>
+    <div class="row">
+      <button class="btn-primary" id="u-save">Save &amp; check</button>
+      <button class="btn-plain" id="m-cancel">Cancel</button>
+    </div>
+    ${updateState.hasToken ? '<div class="row"><button class="btn-plain" id="u-clear">Remove stored token</button></div>' : ''}`;
+  $modalBack.hidden = false;
+  window.api.setModalOpen(true);
+  $modal.querySelector('#m-cancel').onclick = closeModal;
+  const box = $modal.querySelector('#m-error');
+  $modal.querySelector('#u-save').onclick = async () => {
+    const val = $modal.querySelector('#u-token').value.trim();
+    if (!val) { box.style.color = 'var(--danger)'; box.textContent = 'Paste a token first.'; return; }
+    box.style.color = 'var(--muted)'; box.textContent = 'Saving and checking…';
+    try {
+      updateState = await window.api.updateSetToken(val);
+      closeModal(); renderHome();
+    } catch (err) {
+      box.style.color = 'var(--danger)';
+      box.textContent = String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    }
+  };
+  const clear = $modal.querySelector('#u-clear');
+  if (clear) clear.onclick = async () => { updateState = await window.api.updateSetToken(''); closeModal(); renderHome(); };
+  $modal.querySelector('#u-token').focus();
 }
 
 function openAddServiceModal() {
@@ -582,6 +683,8 @@ pollMemory();
 
 function renderAll() { renderTabCtl(); renderTabs(); renderRail(); renderHome(); }
 
+window.api.onUpdateState(s => { updateState = s; if (state.activeKey === null) renderHome(); });
+
 window.api.onTabsState(s => {
   const prevFocus = document.activeElement && document.activeElement.id;
   state = Object.assign(state, s);
@@ -601,6 +704,7 @@ window.api.onTabsState(s => {
   state.collapsed = (settings && settings.collapsed) || [];
   state.stripCollapsed = (settings && settings.stripCollapsed) || [];
   credStats = await window.api.credsStats().catch(() => null);
+  updateState = await window.api.updateState().catch(() => ({ status: 'idle', currentVersion: '' }));
   renderAll();
   window.api.uiReady(); // triggers session restore in main
   window.api.refreshAllStatus().catch(() => {});
