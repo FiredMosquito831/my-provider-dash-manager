@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('api', {
   sleepTab: key => ipcRenderer.invoke('sleep-tab', key),
   sleepAll: () => ipcRenderer.invoke('sleep-all'),
   setModalOpen: open => ipcRenderer.invoke('set-modal-open', open),
+  showHome: () => ipcRenderer.invoke('show-home'),
   updateAccount: (svc, id, patch) => ipcRenderer.invoke('update-account', svc, id, patch),
   deleteAccount: (svc, id) => ipcRenderer.invoke('delete-account', svc, id),
   memory: () => ipcRenderer.invoke('memory'),

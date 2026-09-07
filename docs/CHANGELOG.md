@@ -5,6 +5,7 @@ All notable changes. Format loosely follows Keep a Changelog.
 ## Unreleased
 
 ### Added
+- **Home dock**: a dedicated ⌂ button in a fixed left dock — reachable from ANY state, including with tabs open (also Esc). Clicking it sleeps the active tab and returns to the account grid; the dock shows the active location.
 - **API layer**: per-account API tokens (validated before storing, encrypted with Windows DPAPI via
   safeStorage, ciphertext-only on disk, revocable in-app) powering home-card status summaries —
   project counts and names for Vercel, Supabase, Netlify, Cloudflare, Railway, Render, GitHub; latest

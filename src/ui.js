@@ -10,6 +10,7 @@ const $modalBack = document.getElementById('modal-back');
 const $modal = document.getElementById('modal');
 const $extBtn = document.getElementById('ext-btn');
 const $hibAll = document.getElementById('hib-all');
+const $left = document.getElementById('left');
 
 function colorOf(colorIdx, svcKey) {
   if (typeof colorIdx === 'number') return PALETTE[colorIdx % PALETTE.length];
@@ -25,6 +26,19 @@ const POLICY_TEXT = {
 };
 
 // ---------- tab strip ----------
+function renderDock() {
+  $left.innerHTML = `<div class="dock ${state.activeKey === null ? 'active' : ''}" id="dock-home" title="Home — all your accounts (Esc)">⌂</div>`;
+  document.body.classList.add('has-dock');
+}
+
+$left.addEventListener('click', async e => {
+  const dock = e.target.closest('#dock-home');
+  if (dock) {
+    if (state.activeKey !== null) await window.api.showHome(); // sleep the active tab; home grid appears
+    renderStrip(); renderHome();
+  }
+});
+
 function renderStrip() {
   $tabs.innerHTML = state.tabs.map(t => {
     const c = colorOf(t.colorIdx, t.svc);
@@ -37,6 +51,7 @@ function renderStrip() {
       <span class="close" data-close="${t.key}" title="Sleep tab (Ctrl+W)">✕</span>
     </div>`;
   }).join('');
+  renderDock(); // must run even with zero tabs (was dead code inside the map callback)
   renderServiceRail();
   $extBtn.hidden = state.activeKey === null;
 }
@@ -249,6 +264,13 @@ function openEditModal(key) {
 }
 
 function closeModal() { $modalBack.hidden = true; $modal.innerHTML = ''; window.api.setModalOpen(false); }
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$modalBack.hidden) { closeModal(); return; }
+  if (e.key === 'Escape' && state.activeKey !== null) {
+    window.api.showHome(); // dedicated Home: Esc from any tab returns to the account grid
+  }
+});
 $modalBack.addEventListener('click', e => { if (e.target === $modalBack) closeModal(); });
 
 // ---------- memory readout ----------

@@ -27,6 +27,12 @@
     button.act { background:var(--panel2); color:var(--text); border:0; border-radius:6px; padding:5px 10px; cursor:pointer; }
     button.act:hover { filter:brightness(1.2); }
     #content { position:relative; flex:1; }
+    #left { position:fixed; left:0; top:48px; bottom:0; width:56px; background:var(--panel); border-right:1px solid #000; display:flex; flex-direction:column; align-items:center; padding:8px 0; gap:8px; z-index:5; }
+    .dock { width:40px; height:40px; border-radius:9px; background:var(--panel2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; color:var(--muted); }
+    .dock:hover { filter:brightness(1.25); color:var(--text); }
+    .dock.active { outline:2px solid var(--accent); color:var(--text); }
+    body.has-dock #content { margin-left:56px; }
+    body.has-dock #home { left:56px; }
     #home { position:absolute; inset:0; overflow-y:auto; padding:24px; }
     #home h2 { font-size:15px; font-weight:600; margin-bottom:4px; }
     #home .sub { color:var(--muted); margin-bottom:18px; }
@@ -63,6 +69,7 @@
   <div id="strip">
     <div id="services"></div>
     <div id="tabs"></div>
+    <div id="left"></div>
     <div id="right">
       <span id="mem">–</span>
       <button class="act" id="ext-btn" title="Open active tab in system browser (Google OAuth / Turnstile fallback)" hidden>↗ Browser</button>

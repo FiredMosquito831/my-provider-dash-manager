@@ -449,7 +449,7 @@ function runInteractive(captureMode = false) {
   const win = new BrowserWindow({
     width: 1400, height: 900,
     backgroundColor: '#1b1d22',
-    show: !captureMode, // capture mode still shows the window: capturePage on hidden windows returns blank
+    show: captureMode, // capturePage fails on hidden windows — capture mode must SHOW the window
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   const vm = new ViewManager();
@@ -469,16 +469,43 @@ function runInteractive(captureMode = false) {
   };
   win.once('ready-to-show', () => { applyBounds(); if (!captureMode) win.show(); });
   if (captureMode) {
+    win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+      console.log(`[renderer:${level}] ${message} (${path.basename(String(sourceId))}:${line})`);
+    });
     win.webContents.once('did-finish-load', () => {
       setTimeout(async () => {
+        // UnknownVizError / empty frames clear once the compositor produces a frame — retry
+        let img = null; let lastErr = null;
+        for (let i = 0; i < 10 && !img; i++) {
+          try {
+            const candidate = await win.webContents.capturePage();
+            if (!candidate.isEmpty()) img = candidate;
+          } catch (err) { lastErr = err; }
+          if (!img) await new Promise(r => setTimeout(r, 1000));
+        }
         try {
-          applyBounds();
-          const img = await win.webContents.capturePage();
+          const dockInfo = await win.webContents.executeJavaScript(`(() => {
+            const d = document.getElementById('dock-home');
+            const l = document.getElementById('left');
+            return JSON.stringify({
+              dock: !!d,
+              leftExists: !!l,
+              leftHtmlLen: l ? l.innerHTML.length : -1,
+              bodyClass: document.body.className,
+              apiExists: typeof window.api !== 'undefined',
+              cardCount: document.querySelectorAll('.card').length,
+            });
+          })()`);
+          console.log('[capture] state:', dockInfo);
+        } catch (err) { console.error('[capture] state probe failed:', err.message); }
+        if (img) {
           fs.writeFileSync(path.join(__dirname, '..', 'ui-screenshot.png'), img.toPNG());
           console.log('[capture] saved ui-screenshot.png', JSON.stringify(img.getSize()));
-        } catch (err) { console.error('[capture] failed:', err.message); }
+        } else {
+          console.error('[capture] failed after retries:', lastErr ? lastErr.message : 'empty frames');
+        }
         app.exit(0);
-      }, 7000);
+      }, 5000);
     });
   }
   win.on('resize', applyBounds);
@@ -549,6 +576,11 @@ function runInteractive(captureMode = false) {
     shell.openExternal(String(url)); // http/https only: never launch arbitrary OS-registered schemes from web content
   });
   ipcMain.handle('set-modal-open', (_e, open) => vm.setModalOpen(!!open));
+  ipcMain.handle('show-home', () => {
+    // dedicated Home: sleep the active tab (session stays on disk) so the home grid is reachable again
+    if (vm.activeKey) vm.hibernate(vm.activeKey);
+    return true;
+  });
 
   // ---------- API-token layer (tokens stay in main; renderer gets summaries only) ----------
   async function refreshAccountStatus(svc, id) {
