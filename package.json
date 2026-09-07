@@ -1,6 +1,6 @@
 {
   "name": "my-provider-dash-manager",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Manage many accounts per cloud service (Vercel, Netlify, Supabase, Cloudflare, Railway, Render, GitHub) in one desktop app \u2014 isolated persistent sessions, one tab per account.",
   "main": "src/main.js",
   "scripts": {
@@ -16,6 +16,7 @@
     "internal:save": "git --git-dir=.internal-git --work-tree=. add -f CLAUDE.md docs/WORKING-NOTES.md && git --git-dir=.internal-git --work-tree=. commit -m \"internal notes snapshot\"",
     "internal:log": "git --git-dir=.internal-git --work-tree=. log --oneline",
     "smoke:updates": "electron . --smoke-updates",
+    "smoke:services": "electron . --smoke-services",
     "install:latest": "node scripts/install-latest.js"
   },
   "devDependencies": {

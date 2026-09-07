@@ -343,8 +343,13 @@ function cardHtml(svc, a) {
   if (a.hasToken && st && st.summary) {
     const names = st.summary.names && st.summary.names.filter(Boolean).length
       ? ` · ${esc(st.summary.names.filter(Boolean).join(', '))}` : '';
-    statusText = `<span class="ok">${st.summary.projects} projects</span>${names}`;
-    if (st.summary.latest) statusText += ` · last deploy ${esc(String(st.summary.latest.state || ''))}`;
+    const sm = st.summary;
+    const parts = [];
+    if (sm.user) parts.push(`<span class="ok">${esc(String(sm.user))}</span>`);
+    if (typeof sm.projects === 'number') parts.push(`<span class="ok">${sm.projects} projects</span>${names}`);
+    if (typeof sm.charges === 'boolean') parts.push(`${sm.live ? 'live' : 'test'} · charges ${sm.charges ? 'on' : 'off'} · payouts ${sm.payouts ? 'on' : 'off'}`);
+    statusText = parts.length ? parts.join(' · ') : '<span class="ok">connected</span>';
+    if (sm.latest) statusText += ` · last deploy ${esc(String(sm.latest.state || ''))}`;
   } else if (a.hasToken && st && st.error) {
     statusText = `<span class="warn">API: ${esc(st.error)}</span>`;
   } else if (a.hasToken && !st) {
@@ -611,7 +616,7 @@ function openEditModal(key, focusToken = false) {
     <label>Display name</label>
     <input type="text" id="m-label" value="${esc(acc.label)}" />
     <label>API token (read-only scope recommended — encrypted with Windows DPAPI, sent only to this service's API)</label>
-    <input type="password" id="m-token" placeholder="${acc.hasToken ? 'token stored — paste to replace' : 'paste token to connect'}" />
+    <input type="password" id="m-token" placeholder="${acc.hasToken ? 'token stored — paste to replace' : esc(svcOf(svc).tokenHint || 'paste token to connect')}" />
     <div class="row">
       <button class="btn-plain" id="m-token-save">Validate &amp; save token</button>
       ${acc.hasToken ? '<button class="btn-plain" id="m-token-clear">Remove token</button>' : ''}

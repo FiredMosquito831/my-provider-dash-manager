@@ -1,9 +1,10 @@
 # My Provider Dash Manager
 
-**One desktop app for every cloud account you own.** Keep several Vercel, Netlify, Supabase,
-Cloudflare, Railway, Render and GitHub accounts signed in at the same time, each in a fully isolated
-session, and switch between them instantly — the way a browser handles tabs, but built around
-*accounts* instead of pages.
+**One desktop app for every cloud account you own.** Keep several Vercel, Netlify, Cloudflare,
+Railway, Render, Fly.io, Heroku, DigitalOcean, Supabase, Neon, GitHub, GitLab, npm, PyPI, Docker Hub,
+Hugging Face and Stripe accounts signed in at the same time, each in a fully isolated session, and
+switch between them instantly — the way a browser handles tabs, but built around *accounts* instead
+of pages.
 
 <sub>Windows desktop app · Electron 43 · local-first · no telemetry, no account, no server ·
 source-available licence: free for personal and commercial use</sub>
@@ -139,10 +140,20 @@ sessions, one place.
   another site reached from that tab (an OAuth hand-off, a look-alike page) is never captured as that
   account's login, and a saved password is never filled into a page outside the service's domains.
 
+### Built-in services
+Seventeen services ship ready to use, grouped in the rail: **hosting** (Vercel, Netlify, Cloudflare,
+Railway, Render, Fly.io, Heroku, DigitalOcean), **data** (Supabase, Neon), **code and packages**
+(GitHub, GitLab, npm, PyPI, Docker Hub, Hugging Face) and **payments** (Stripe). Every login page is
+verified to load inside an isolated partition by `npm run smoke:services`. Anything else can be added
+by URL or as a plugin (below).
+
 ### API status
-Paste a read-only API token into an account and its Home card shows live status — project counts and
-names for every built-in service, plus latest deploy state on Vercel. Tokens are validated before
-being stored, encrypted with DPAPI, revocable in one click, and never leave the main process.
+Paste a read-only API token into an account and its Home card shows live status — project, app,
+repository or package counts and names for every built-in service except PyPI (whose tokens are
+upload-only), latest deploy state on Vercel, and account name plus charges/payouts state on Stripe.
+The token field tells you which kind of credential each service expects (Docker Hub needs
+`username:token`). Tokens are validated before being stored, encrypted with DPAPI, revocable in one
+click, and never leave the main process.
 
 ### Content
 - **Ad-blocking** driven by EasyList (~52,000 blocked hosts plus generic cosmetic rules, refreshed
@@ -174,7 +185,9 @@ being stored, encrypted with DPAPI, revocable in one click, and never leave the 
 
 The app surfaces each provider's stance instead of hiding it. GitHub and Railway allow one account
 per person and the rail says so — use their organisations and workspaces instead. Vercel, Netlify,
-Supabase and Cloudflare tolerate separate accounts but watch for abuse. Account creation is always
+Supabase, Cloudflare, Heroku and DigitalOcean tolerate separate accounts but watch for abuse; the
+registries (npm, PyPI, Docker Hub, Hugging Face), GitLab, Fly.io, Neon and Stripe treat extra accounts
+as ordinary (Stripe expects one per business). Account creation is always
 manual and guided; nothing is ever automated, because automated signup violates several providers'
 acceptable-use policies.
 
@@ -213,6 +226,7 @@ npm run smoke:tokens # DPAPI round-trip + live token rejection
 npm run smoke:creds  # import, per-account recall, encryption at rest
 npm run smoke:autofill # real page: form detection, fill, capture
 npm run smoke:updates  # version comparison + real release-feed check
+npm run smoke:services # every built-in login page loads inside an isolated partition
 npm run capture      # screenshot the running shell
 npm run spike        # memory benchmark
 npm run dist         # build the Windows installer

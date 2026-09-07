@@ -2,6 +2,26 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.4.0 — 2026-09-07
+
+### Added
+- **Ten new built-in services**: Fly.io, Heroku, DigitalOcean, Neon, GitLab, npm, PyPI, Docker Hub,
+  Hugging Face and Stripe — 17 in total, now grouped in the rail as hosting, data, code & packages,
+  and payments. Each gets isolated per-account sessions, guided login/signup, saved-login capture and
+  fill, and (except PyPI, whose tokens are upload-only) an API status card.
+- **Status cards** for the new services: apps on Fly.io, Heroku and DigitalOcean (droplets + App
+  Platform), projects on Neon and GitLab, packages on npm, repositories on Docker Hub, models on
+  Hugging Face, and account name with charges/payouts state on Stripe.
+- The token field now says which credential each service expects (e.g. Docker Hub needs
+  `username:token`; Stripe wants a restricted read key).
+- `npm run smoke:services`: checks every built-in definition and loads each login page inside an
+  isolated partition, asserting it lands on a host the credential guard accepts (21 checks).
+- `smoke:tokens` now proves every new provider rejects a fake token cleanly (15 checks).
+
+### Changed
+- Services that authenticate on a separate domain (Docker Hub → `login.docker.com`) declare it
+  explicitly, so saved logins are captured and filled there but nowhere else.
+
 ## 0.3.1 — 2026-09-07
 
 ### Changed

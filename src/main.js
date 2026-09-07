@@ -115,7 +115,9 @@ function accountKey(svc, id) { return `${svc}::${id}`; }
 function serviceHosts(svcKey) {
   const s = serviceByKey(svcKey);
   if (!s) return [];
-  return [...new Set([s.dashboardUrl, s.loginUrl, s.signupUrl].filter(Boolean).map(u => creds.hostOf(u)).filter(Boolean))];
+  const fromUrls = [s.dashboardUrl, s.loginUrl, s.signupUrl].filter(Boolean).map(u => creds.hostOf(u));
+  const extra = Array.isArray(s.extraHosts) ? s.extraHosts.map(h => creds.hostOf(`https://${h}/`)) : [];
+  return [...new Set([...fromUrls, ...extra].filter(Boolean))];
 }
 function originAllowed(svcKey, url) {
   const host = creds.hostOf(url || '');
@@ -589,6 +591,50 @@ async function runSmokeTokens() {
   }
   await tokens.clearToken('vercel::toktest');
   check('clear', (await tokens.getToken('vercel::toktest')) === null);
+  // every provider added in 0.4.0 must reject a fake token cleanly (TOKEN_INVALID), never accept or crash
+  const fakes = { fly: 'fo1_fake0000000000000000000000000000', heroku: 'HRKU-fake-0000', digitalocean: 'dop_v1_fake0000', neon: 'napi_fake0000', gitlab: 'glpat-fake000000000000', npm: 'npm_fake000000000000000000000000000000', dockerhub: 'nobody-mam:dckr_pat_fake0000', huggingface: 'hf_fake000000000000000000000000000', stripe: 'rk_test_fake000000000000000000' };
+  for (const [key, fake] of Object.entries(fakes)) {
+    try { await PROVIDERS[key].validate(fake); check(`fake-token-rejected:${key}`, false, 'API accepted a fake token?!'); }
+    catch (err) { check(`fake-token-rejected:${key}`, err.message === 'TOKEN_INVALID', `err=${err.message}`); }
+  }
+  check('dockerhub-needs-username', await PROVIDERS.dockerhub.validate('no-colon-here').then(() => false, err => /username:token/.test(err.message)));
+  fs.writeFileSync(path.join(__dirname, '..', 'smoke-report.json'), JSON.stringify(results, null, 2));
+  app.exit(results.checks.every(c => c.ok) ? 0 : 1);
+}
+
+// ---------- smoke services: every built-in service definition is sane and its login page really
+// loads inside an isolated partition, landing on a host the credential origin guard accepts ----------
+async function runSmokeServices() {
+  const results = { mode: 'services', checks: [] };
+  const check = (name, ok, detail = '') => { results.checks.push({ name, ok, detail }); console.log(`[smoke:services] ${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`); };
+  const keys = SERVICES.map(s => s.key);
+  check('unique-keys', new Set(keys).size === keys.length, `${keys.length} services`);
+  check('definitions-complete', SERVICES.every(s => s.name && /^https:\/\//.test(s.dashboardUrl) && /^https:\/\//.test(s.loginUrl) && /^https:\/\//.test(s.signupUrl) && /^#[0-9a-f]{6}$/i.test(s.color) && ['ok', 'warn', 'one-per-person'].includes(s.multiAccountPolicy)));
+  check('partition-ids-safe', SERVICES.every(s => /^[a-z0-9_-]+$/.test(s.key)), keys.join(','));
+  check('extra-hosts-in-guard', serviceHosts('dockerhub').includes('login.docker.com') && originAllowed('dockerhub', 'https://login.docker.com/u/login?x=1') && !originAllowed('dockerhub', 'https://evil.example/'));
+
+  const win = new BaseWindow({ width: 1280, height: 800, show: false });
+  const vm = new ViewManager();
+  vm.attach(win);
+  const only = (process.argv.find(a => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);
+  const targets = SERVICES.filter(s => !only.length || only.includes(s.key));
+  const loadOne = svc => new Promise(resolve => {
+    const key = vm.create(svc.key, 'probe', svc.loginUrl, { show: false });
+    const tab = vm.tabs.get(key);
+    const wc = tab.view.webContents;
+    let settled = false;
+    const finish = (status, detail) => { if (settled) return; settled = true; clearTimeout(timer); resolve({ status, detail, url: wc.getURL(), title: wc.getTitle() }); };
+    const timer = setTimeout(() => finish('timeout', ''), 30000);
+    wc.on('did-fail-load', (_e, code, desc, url, isMain) => { if (isMain && code !== -3) finish('fail', `${code} ${desc} ${url}`); });
+    wc.on('did-finish-load', () => setTimeout(() => finish('ok', ''), 1500)); // let client-side redirects settle
+  });
+  for (const svc of targets) {
+    const r = await loadOne(svc);
+    const host = creds.hostOf(r.url);
+    const guardOk = originAllowed(svc.key, r.url);
+    const httpOk = r.status === 'ok' && /^https:\/\//.test(r.url);
+    check(`login-loads:${svc.key}`, httpOk && guardOk, `${r.status} ${r.url} "${r.title}"${guardOk ? '' : ` — host ${host} is outside the credential guard`}${r.detail ? ` ${r.detail}` : ''}`);
+  }
   fs.writeFileSync(path.join(__dirname, '..', 'smoke-report.json'), JSON.stringify(results, null, 2));
   app.exit(results.checks.every(c => c.ok) ? 0 : 1);
 }
@@ -1218,7 +1264,7 @@ function cycleTab(vm, dir) {
 }
 
 // test modes default to an isolated userData: they can never pollute the real registry/partitions
-const TEST_FLAGS = ['--spike', '--smoke', '--smoke-restore', '--smoke-tokens', '--smoke-creds', '--smoke-autofill', '--smoke-updates'];
+const TEST_FLAGS = ['--spike', '--smoke', '--smoke-restore', '--smoke-tokens', '--smoke-creds', '--smoke-autofill', '--smoke-updates', '--smoke-services'];
 const testFlag = TEST_FLAGS.find(f => process.argv.includes(f));
 if (testFlag && !process.env.MAM_USER_DATA) {
   const dirName = testFlag === '--smoke-restore' ? 'mam-test-smoke' : `mam-test-${testFlag.slice(2)}`;
@@ -1252,6 +1298,7 @@ if (!gotLock) {
     else if (process.argv.includes('--smoke-creds')) runSmokeCreds().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke-autofill')) runSmokeAutofill().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke-updates')) runSmokeUpdates().catch(err => { console.error(err); app.exit(1); });
+    else if (process.argv.includes('--smoke-services')) runSmokeServices().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--capture')) runInteractive(true);
     else runInteractive();
   });
