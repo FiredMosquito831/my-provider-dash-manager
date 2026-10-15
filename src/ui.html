@@ -168,6 +168,22 @@
     .btn-plain:hover { background:var(--panel3); }
     .btn-danger { background:#7f2b2b; color:#fff; border:0; border-radius:7px; padding:8px 10px; }
     #modal .note { color:var(--muted); font-size:11px; margin-top:var(--s3); line-height:1.55; }
+    #modal select { width:100%; background:var(--panel2); border:1px solid var(--border); color:var(--text);
+                   border-radius:7px; padding:7px 9px; font:inherit; }
+    #modal select:focus { border-color:var(--accent); outline:none; }
+    #modal .cred-filter { max-width:280px; margin-bottom:var(--s3); }
+    #modal .credgroup { margin-top:var(--s3); }
+    #modal .credgroup h4 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:var(--s1); }
+    .credrow { display:flex; align-items:center; gap:var(--s2); padding:var(--s2); border:1px solid var(--border);
+               border-radius:8px; margin-bottom:var(--s1); background:var(--panel2); }
+    .credidentity { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+    .credidentity strong { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .credidentity span { color:var(--muted); font-size:11px; }
+    .creddefault { color:var(--ok); }
+    .creddefaultctl { display:flex; gap:var(--s1); align-items:center; }
+    .creddefaultctl select { width:170px; }
+    .creddefaultctl button { flex:none; padding:6px 9px; font-size:11px; }
+    .creddelete { flex:none; padding:6px 9px; font-size:11px; }
     [hidden] { display:none !important; }
     @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
   </style>

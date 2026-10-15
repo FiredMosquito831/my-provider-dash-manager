@@ -74,7 +74,9 @@ Per-service facts that shaped the design:
 | `src/providers.js` | Read-only API status fetchers per built-in service |
 | `src/api-tokens.js` | DPAPI-encrypted token store (`safeStorage`), validated before storing |
 | `src/credentials.js` | Saved logins: encrypted store, Chromium/CSV import, per-account + per-origin recall |
-| `src/content.js` | EasyList ad-blocking (per-partition `webRequest`), cosmetic CSS, dark mode |
+| `src/content.js` | EasyList ad-blocking (per-partition `webRequest`) and cosmetic CSS |
+| `src/darkmode.js` | Dark mode: Dark Reader's npm API build, evaluated in each account view's isolated world (world 999) |
+| `vendor/darkreader/` | Vendored Dark Reader 4.9.133 API build (355 KB UMD, MIT) — the engine `src/darkmode.js` injects |
 | `src/plugins.js` | Service manifests: validation, load/install/remove, generic API status provider |
 | `src/updater.js` | Version tracking, release info, explicit download/install, private-repo token support |
 | `scripts/install-latest.js` | `npm run install:latest`: pull the newest release and run its installer |

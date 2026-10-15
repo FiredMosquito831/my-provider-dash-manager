@@ -271,7 +271,10 @@ $railScroll.addEventListener('click', async e => {
   const fill = e.target.closest('[data-fill]');
   if (fill) {
     e.stopPropagation();
-    try { await window.api.fillLogin(fill.getAttribute('data-fill')); }
+    try {
+      const r = await window.api.fillLogin(fill.getAttribute('data-fill'));
+      if (r && r.choose) openCredsChooser(fill.getAttribute('data-fill'), r.choose);
+    }
     catch (err) { alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); }
     return;
   }
@@ -306,6 +309,7 @@ $extBtn.addEventListener('click', async () => {
 function renderHome() {
   if (state.activeKey !== null) { $home.hidden = true; return; }
   $home.hidden = false;
+  const keepScroll = $home.scrollTop; // background tab loads re-render Home; never yank the user to the top
   const editing = document.activeElement && document.activeElement.id === 'warm-limit';
   const keepValue = editing ? document.activeElement.value : null;
   const st = state.settings || {};
@@ -315,8 +319,7 @@ function renderHome() {
       <span>Warm-tab limit: <input type="number" id="warm-limit" min="1" max="15" value="${state.warmLimit}"></span>
       <button class="ctlbtn" id="refresh-status" title="Re-fetch API status for all connected accounts">${icon('refresh')} Refresh status</button>
       <button class="ctlbtn ${st.adBlock ? 'on' : ''}" id="t-adBlock" title="Block ads and trackers in account tabs (uBlock-style, built in)">${icon('shield')} Ad-block${state.blocked ? ` · ${state.blocked}` : ''}</button>
-      <button class="ctlbtn ${st.darkMode ? 'on' : ''}" id="t-darkMode" title="Ask sites for their own dark theme (prefers-color-scheme)">${icon('moon')} Dark sites</button>
-      <button class="ctlbtn ${st.forceDark ? 'on' : ''}" id="t-forceDark" title="Force dark on sites with no dark theme (Dark Reader-style inversion)">${icon('contrast')} Force dark</button>
+      <button class="ctlbtn ${st.darkMode ? 'on' : ''}" id="t-darkMode" title="Dark mode for every account tab, powered by Dark Reader — applies instantly, no reload">${icon('moon')} Dark mode</button>
       <span>· click a card to open its dashboard — sessions persist per account</span>
     </div>
     ${services.filter(hasPresence).map(svc => {
@@ -343,10 +346,11 @@ function renderHome() {
         <button class="ctlbtn ${st.autofill ? 'on' : ''}" id="t-autofill" title="Fill the saved login automatically when a sign-in page appears">${icon('play')} Auto-fill</button>
         <button class="ctlbtn" id="imp-browser" title="Import saved passwords from an installed browser">${icon('download')} Import from browser</button>
         <button class="ctlbtn" id="imp-csv" title="Import a password CSV exported from any browser">${icon('download')} Import CSV</button>
-        ${(state.credCount || (credStats && credStats.total)) ? `<button class="ctlbtn" id="imp-clear" title="Delete every stored login">${icon('x')} Clear</button>` : ''}
+        ${(state.credCount || (credStats && credStats.total)) ? `<button class="ctlbtn" id="imp-manage" title="See, choose and delete saved logins per site">${icon('gear')} Manage logins…</button><button class="ctlbtn" id="imp-clear" title="Delete every stored login">${icon('x')} Clear</button>` : ''}
       </div>
     </div>`;
   restoreHomeFocus(keepValue); // re-renders no longer kick you out of the warm-limit field
+  $home.scrollTop = keepScroll;
 }
 
 // Chips for every service that has no presence yet, grouped by category. `attr` is the data attribute
@@ -503,10 +507,11 @@ $home.addEventListener('click', async e => {
   if (e.target.closest('#imp-csv')) {
     try {
       const r = await window.api.credsImportCsv();
-      if (r) { credStats = await window.api.credsStats(); renderHome(); alert(`Imported ${r.added} new logins (${r.found} found, ${credStats.total} stored).`); }
+      if (r) { credStats = await window.api.credsStats(); renderHome(); alert(`Imported ${r.added} new logins${r.updated ? `, updated ${r.updated}` : ''} (${r.found} found, ${credStats.total} stored).`); }
     } catch (err) { alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); }
     return;
   }
+  if (e.target.closest('#imp-manage')) { openCredsManagerModal(); return; }
   if (e.target.closest('#imp-clear')) {
     if (confirm('Delete every stored login? Sessions stay signed in; only saved passwords are removed.')) {
       await window.api.credsClear();
@@ -593,7 +598,7 @@ async function openImportModal() {
         const r = await window.api.credsImportBrowser(b.id);
         credStats = await window.api.credsStats();
         box.style.color = r.added ? 'var(--ok)' : 'var(--warn)';
-        box.textContent = `${r.added} new logins imported (${r.found} readable of ${r.found + r.locked + r.failed}).` + (r.note ? ` ${r.note}` : '');
+        box.textContent = `${r.added} new logins imported${r.updated ? `, ${r.updated} updated` : ''} (${r.found} readable of ${r.found + r.locked + r.failed}).` + (r.note ? ` ${r.note}` : '');
         renderHome();
       } catch (err) {
         box.style.color = 'var(--danger)';
@@ -766,6 +771,125 @@ function openEditModal(key, focusToken = false) {
     }
   };
   ($modal.querySelector(focusToken ? '#m-token' : '#m-label')).focus();
+}
+
+// ============ saved logins: manager + per-account chooser ============
+// Passwords never reach this renderer: every row is a summary (id/host/username/source), and the
+// fill resolves the password in main against the account and the tab's live URL.
+async function openCredsManagerModal() {
+  $modalBack.hidden = false;
+  window.api.setModalOpen(true);
+  $modal.innerHTML = '<h3>Saved logins</h3><div class="note">Loading…</div>';
+  let list = [];
+  let serviceFilter = 'all';
+  try { list = await window.api.credsList(); } catch (err) { closeModal(); alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); return; }
+  const render = () => {
+    const svcName = k => (k && svcOf(k).name) || 'Other';
+    const serviceKeys = [...new Set(list.flatMap(c => c.serviceKeys || []))].sort((a, b) => svcName(a).localeCompare(svcName(b)));
+    const shown = serviceFilter === 'all' ? list : list.filter(c => (c.serviceKeys || []).includes(serviceFilter));
+    const groups = new Map();
+    for (const c of shown) {
+      const key = serviceFilter !== 'all' ? serviceFilter : ((c.serviceKeys || []).length === 1 ? c.serviceKeys[0] : (c.serviceKeys || []).length > 1 ? 'shared' : 'other');
+      const g = key === 'shared' ? 'Shared imports' : svcName(key);
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(c);
+    }
+    const rowHtml = c => {
+      const keys = c.serviceKeys || [];
+      // A captured login belongs to its exact account. Imported logins can be assigned to any
+      // account whose service host matches; never offer other accounts for a captured credential.
+      const accounts = c.accountKey
+        ? registry.filter(a => a.key === c.accountKey)
+        : registry.filter(a => keys.includes(a.svc));
+      const defaults = c.defaultForAccounts || [];
+      const choices = accounts.map(a => {
+        const key = `${a.svc}::${a.id}`;
+        return `<option value="${esc(key)}" ${defaults.includes(key) ? 'selected' : ''}>${esc(svcOf(a.svc).name)} · ${esc(a.label || a.id)}</option>`;
+      }).join('');
+      return `<div class="credrow">
+        <div class="credidentity">
+          <strong>${esc(c.username || '(no username)')}</strong>
+          <span>${esc(c.host) || '<no site>'} · ${esc(c.source)}${c.accountKey ? ` · captured for ${esc(c.accountKey)}` : ''}</span>
+          ${!c.host ? '<span class="creddefault">No site recorded — this login cannot autofill anywhere; add the site by editing your browser export, or delete it here.</span>' : ''}
+          ${defaults.length ? `<span class="creddefault">★ Default for ${esc(defaults.map(k => { const a=registry.find(x=>x.key===k); return a ? `${svcOf(a.svc).name} · ${a.label || a.id}` : k; }).join(', '))}</span>` : ''}
+        </div>
+        ${accounts.length ? `<div class="creddefaultctl"><select data-cred-account="${esc(c.id)}"><option value="">Choose account…</option>${choices}<option value="__clear__">Clear default…</option></select><button class="btn-plain" data-cred-default="${esc(c.id)}">Set default</button></div>` : ''}
+        <button class="btn-plain creddelete" data-cred-del="${esc(c.id)}">Delete</button>
+      </div>`;
+    };
+    $modal.innerHTML = `
+      <h3>Saved logins</h3>
+      <div class="note" style="margin-top:0">Passwords stay encrypted and are never shown here. Choose a per-account default for autofill, or delete one login at a time.</div>
+      <label for="cred-filter">Filter by service</label>
+      <select id="cred-filter" class="cred-filter"><option value="all">All services</option>${serviceKeys.map(k => `<option value="${esc(k)}" ${serviceFilter===k?'selected':''}>${esc(svcName(k))}</option>`).join('')}</select>
+      ${shown.length ? [...groups.entries()].map(([svc, items]) => `<section class="credgroup"><h4>${esc(svc)}</h4>${items.map(rowHtml).join('')}</section>`).join('') : '<div class="note">No saved logins match this service.</div>'}
+      <div id="m-error" style="font-size:11px;margin-top:8px"></div>
+      <div class="row"><button class="btn-plain" id="m-cancel">Close</button></div>`;
+    $modal.querySelector('#m-cancel').onclick = closeModal;
+    $modal.querySelector('#cred-filter').onchange = e => { serviceFilter = e.target.value; render(); };
+    $modal.querySelectorAll('[data-cred-default]').forEach(b => {
+      b.onclick = async () => {
+        const box = $modal.querySelector('#m-error');
+        const entry = list.find(c => c.id === b.dataset.credDefault);
+        if (!entry) { box.style.color = 'var(--warn)'; box.textContent = 'That login is no longer listed.'; return; }
+        const value = $modal.querySelector(`[data-cred-account="${CSS.escape(entry.id)}"]`)?.value;
+        if (!value) { box.style.color = 'var(--warn)'; box.textContent = 'Choose an account first.'; return; }
+        try {
+          if (value === '__clear__') {
+            for (const key of entry.defaultForAccounts || []) { const [svc,id]=key.split('::'); await window.api.credsDefault(null,svc,id,entry.host); }
+            list = list.map(c => c.id === entry.id ? { ...c, defaultForAccounts: [] } : c);
+          } else {
+            const [svc,id] = value.split('::');
+            await window.api.credsDefault(entry.id,svc,id,entry.host);
+            list = list.map(c => ({ ...c, defaultForAccounts: (c.defaultForAccounts || []).filter(k => k !== value) }));
+            // `list.map` above produced NEW objects, so the old `entry` reference is now detached
+            // from the list render() reads. Re-find it and mutate THAT, or the ★ marker keeps the
+            // previous account until the modal is reopened.
+            const fresh = list.find(c => c.id === entry.id);
+            if (fresh) fresh.defaultForAccounts = [...fresh.defaultForAccounts, value];
+          }
+          render();
+        } catch (err) { box.style.color = 'var(--danger)'; box.textContent = String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); }
+      };
+    });
+    $modal.querySelectorAll('[data-cred-del]').forEach(b => {
+      b.onclick = async () => {
+        const box = $modal.querySelector('#m-error');
+        try {
+          const id = b.getAttribute('data-cred-del');
+          await window.api.credsDelete(id);
+          list = list.filter(c => c.id !== id);
+          credStats = await window.api.credsStats();
+          renderHome();
+          render();
+        } catch (err) { box.style.color = 'var(--danger)'; box.textContent = String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); }
+      };
+    });
+  };
+  render();
+}
+
+function openCredsChooser(key, candidates) {
+  const [svc, id] = key.split('::');
+  $modal.innerHTML = `
+    <h3>${esc(svcOf(svc).name)} · ${esc(id)} — choose a login</h3>
+    <div class="note" style="margin-top:0">More than one saved login matches this site. Your choice is remembered as the default for this account.</div>
+    ${candidates.map(c => `
+      <div class="row"><button class="btn-plain" data-cred="${esc(c.id)}" style="text-align:left">
+        ${esc(c.username || '(no username)')} <span style="color:var(--muted);font-size:11px">· ${esc(c.host)} · ${esc(c.source)}</span>
+      </button></div>`).join('')}
+    <div class="row"><button class="btn-plain" id="m-cancel">Cancel</button></div>`;
+  $modalBack.hidden = false;
+  window.api.setModalOpen(true);
+  $modal.querySelector('#m-cancel').onclick = closeModal;
+  $modal.querySelectorAll('[data-cred]').forEach(b => {
+    b.onclick = async () => {
+      try {
+        const r = await window.api.fillLogin(key, b.getAttribute('data-cred'));
+        if (r && r.filled) closeModal();
+      } catch (err) { alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); }
+    };
+  });
 }
 
 function closeModal() { $modalBack.hidden = true; $modal.innerHTML = ''; window.api.setModalOpen(false); }

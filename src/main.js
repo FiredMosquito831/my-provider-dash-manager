@@ -5,6 +5,7 @@ const SERVICES = require('./services');
 const tokens = require('./api-tokens');
 const { PROVIDERS } = require('./providers');
 const content = require('./content');
+const dark = require('./darkmode');
 const creds = require('./credentials');
 const plugins = require('./plugins');
 const updater = require('./updater');
@@ -35,9 +36,15 @@ function writeJson(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
+// ---------- dark mode: Dark Reader's API build, in each account view's isolated world ----------
+// Deliberately NOT a browser extension. Dark Reader's MV3 extension cannot work here: its
+// background service worker dies on the chrome.* APIs Electron 43 does not expose, and its
+// content script declares world:"MAIN", which mutates page prototypes the account's own
+// JavaScript can observe — a breach of invariant 2. See src/darkmode.js for the measurements.
+
 const store = {
   accounts: [], // {svc, id, label, colorIdx, proxy, createdAt, lastState}
-  settings: { warmLimit: 5, groupTabs: false, collapsed: [], stripCollapsed: [], adBlock: true, darkMode: true, forceDark: false, saveLogins: true, autofill: true },
+  settings: { warmLimit: 5, groupTabs: false, collapsed: [], stripCollapsed: [], adBlock: true, darkMode: true, saveLogins: true, autofill: true },
   openTabs: [], // session memory: [{svc, id, url, lastActivated, active}] — survives restarts
   customServices: [], // Phase 2: user-added services {key,name,dashboardUrl,loginUrl,color,custom:true}
   save() {
@@ -48,7 +55,12 @@ const store = {
   saveSession() { writeJson(userDataPath('session.json'), this.openTabs); },
   load() {
     this.accounts = readJson(userDataPath('accounts.json'), []);
-    this.settings = Object.assign({ warmLimit: 5, groupTabs: false, collapsed: [], stripCollapsed: [], adBlock: true, darkMode: true, forceDark: false, saveLogins: true, autofill: true, autoUpdate: true }, readJson(userDataPath('settings.json'), {}));
+    const saved = readJson(userDataPath('settings.json'), {});
+    // 0.8.0: the force-dark CSS invert is replaced by bundled Dark Reader. A profile that had it
+    // on keeps dark mode on, and the dead key is dropped rather than left in the file.
+    if (saved.forceDark) saved.darkMode = true;
+    delete saved.forceDark;
+    this.settings = Object.assign({ warmLimit: 5, groupTabs: false, collapsed: [], stripCollapsed: [], adBlock: true, darkMode: true, saveLogins: true, autofill: true, autoUpdate: true }, saved);
     this.openTabs = readJson(userDataPath('session.json'), []);
     this.customServices = readJson(userDataPath('services.json'), []);
   },
@@ -258,6 +270,8 @@ class ViewManager {
     this.trackSession(svc, id, tab.url); // tab joins the remembered open set
     this.window.contentView.addChildView(view);
     if (show) this.activate(key);
+    // Dark mode is enabled per document from did-navigate below (the isolated world cannot exist
+    // before its page does), so there is nothing to attach before the first load.
     view.webContents.loadURL(tab.url).catch(err => console.error(`load failed ${key}:`, err.message));
     view.webContents.on('page-title-updated', (_e, title) => { tab.title = title; this.emitState(); });
     // Escape must reach Home even while the dashboard page has focus (the renderer's keydown
@@ -266,7 +280,13 @@ class ViewManager {
       if (input.type === 'keyDown' && input.key === 'Escape' && !this.modalOpen) this.deactivate();
     });
     view.webContents.on('did-finish-load', () => {
-      content.applyToPage(view.webContents, { adBlock: !!store.settings.adBlock, forceDark: !!store.settings.forceDark });
+      content.applyToPage(view.webContents, { adBlock: !!store.settings.adBlock });
+      // Enable dark mode once the document's styles exist. did-navigate fires too early: the
+      // dynamic engine finds no stylesheets to transform yet, so enabling there leaves the page
+      // white. This fires again after every cross-origin navigation, which is exactly what the
+      // isolated-world reset requires — the world (and Dark Reader in it) is gone by then and must
+      // be re-injected. Same-document (pushState) routing never reaches here, so it never re-injects.
+      if (store.settings.darkMode) dark.enable(view.webContents);
     });
     const onNav = (_e, url2) => {
       tab.url = url2;
@@ -280,6 +300,10 @@ class ViewManager {
       if (a) { a.lastState = tab.lastState; store.save(); }
       this.emitState();
     };
+    // Dark mode is (re-)enabled from did-finish-load above, not here: that handler runs after the
+    // document's styles exist and after every cross-origin navigation, which is exactly when the
+    // isolated-world engine needs (re-)injecting. did-navigate-in-page (pushState) keeps the world,
+    // so it deliberately does not re-inject.
     view.webContents.on('did-navigate', onNav);
     view.webContents.on('did-navigate-in-page', onNav); // dashboards route client-side (pushState) — must track too
     view.webContents.on('did-start-loading', () => this.emitState());
@@ -366,6 +390,9 @@ class ViewManager {
     try { this.window.contentView.removeChildView(tab.view); } catch {}
     try { tab.view.webContents.close(); } catch {} // separate: a dead contentView must not skip closing the renderer
     this.tabs.delete(key);
+    // Nothing to undo for dark mode here: closing the renderer above discards its isolated world
+    // and the Dark Reader inside it. darkmode.js tracks state in a WeakMap, so the dead view is
+    // collected with it — no per-tab teardown, and reopening re-enables on its first navigation.
     // NOTE: the session entry is intentionally kept — a slept tab stays in the strip and can be resumed.
     if (this.activeKey === key) {
       this.activeKey = null;
@@ -389,6 +416,7 @@ class ViewManager {
       this.tabs.delete(key);
     }
     this.untrackSession(svc, id); // also drop it from the remembered tab set
+    try { creds.removeForAccount(svc, id); } catch {} // a deleted account's captured login must not linger for a future account with the same id
     store.accounts = store.accounts.filter(a => !(a.svc === svc && a.id === id));
     store.save();
     try {
@@ -719,6 +747,35 @@ async function runSmokeCreds() {
     const fb = creds.forAccount('vercel', 'never-signed-in', 'https://vercel.com/login');
     check('host-fallback-from-import', !!fb && fb.username === 'alice@example.com', fb ? fb.username : 'none');
 
+    // a second username captured for the same account is a SECOND candidate — no silent first-wins
+    creds.rememberForAccount('vercel', 'acc9', { url: 'https://vercel.com/login', username: 'second@example.com', password: 'second-pw' });
+    const cands = creds.candidatesForAccount('vercel', 'acc9', 'https://vercel.com/login');
+    check('candidates-include-both-usernames', cands.length === 3 && cands.filter(c => c.accountKey === 'vercel::acc9').length === 2 && cands.every(c => !!c.id), `${cands.length} candidates (2 own + 1 imported)`);
+    check('ambiguous-own-never-guesses', creds.credentialForAccount('vercel', 'acc9', 'https://vercel.com/login') === null);
+    const pick = cands.find(c => c.username === 'second@example.com');
+    creds.setDefaultForAccount(pick.id, 'vercel', 'acc9', 'https://vercel.com/login');
+    check('chosen-default-wins', (creds.credentialForAccount('vercel', 'acc9', 'https://vercel.com/login') || {}).username === 'second@example.com');
+    // the chooser projection must carry no password — invariant 3
+    const sums = creds.candidateSummariesForAccount('vercel', 'acc9', 'https://vercel.com/login');
+    check('chooser-summaries-have-no-passwords', sums.length === 3 && sums.every(c => !('password' in c) && !!c.id && c.isDefault === (c.username === 'second@example.com')), `${sums.length} summaries`);
+    check('delete-credential', creds.deleteCredential(pick.id) === true && !creds.listCredentials().some(c => c.id === pick.id) && (creds.credentialForAccount('vercel', 'acc9', 'https://vercel.com/login') || {}).username === 'typed@example.com');
+    check('manager-list-has-no-passwords', creds.listCredentials().every(c => !('password' in c) && !!c.id));
+
+    // two imported logins on one host are ambiguous: autofill asks instead of guessing
+    const csv2 = path.join(app.getPath('temp'), `mam-creds2-${process.pid}.csv`);
+    fs.writeFileSync(csv2, 'url,username,password\nhttps://vercel.com/login,carol@example.com,carol-pw\n');
+    try {
+      const r2 = creds.importFromCsv(csv2);
+      check('second-import-added', r2.added === 1, JSON.stringify(r2));
+      check('ambiguous-import-never-guesses', creds.credentialForAccount('vercel', 'third-account', 'https://vercel.com/login') === null);
+    } finally { try { fs.rmSync(csv2, { force: true }); } catch {} }
+
+    // deleting an account drops its captured logins AND its defaults
+    creds.rememberForAccount('vercel', 'acc9', { url: 'https://vercel.com/login', username: 'third@example.com', password: 'third-pw' });
+    creds.setDefaultForAccount(creds.candidatesForAccount('vercel', 'acc9', 'https://vercel.com/login').find(c => c.username === 'third@example.com').id, 'vercel', 'acc9', 'https://vercel.com/login');
+    const removed = creds.removeForAccount('vercel', 'acc9');
+    check('account-delete-drops-captures-and-defaults', removed === 2 && !creds.listCredentials().some(c => (c.accountKey === 'vercel::acc9') || (c.defaultForAccounts || []).includes('vercel::acc9')), `removed=${removed}`);
+
     const raw = fs.readFileSync(path.join(app.getPath('userData'), 'credentials.json'), 'utf8');
     check('encrypted-at-rest', !raw.includes('hunter2') && !raw.includes('typed-pw'));
 
@@ -830,6 +887,79 @@ async function runSmokeUpdates() {
   app.exit(results.checks.every(c => c.ok) ? 0 : 1);
 }
 
+// ---------- smoke dark: Dark Reader's API build really darkens, and only inside the isolated world ----------
+// The old check asserted a Dark Reader extension was LOADED, which was vacuous: its MV3 worker
+// crashed on Electron 43 and only the OS-preference fallback CSS ever ran. This one asserts the
+// engine actually changes computed colours AND that the page's own main world is left untouched
+// (invariant 2), which is the whole reason the engine is not shipped as a browser extension.
+async function runSmokeDark() {
+  const results = { mode: 'dark', checks: [] };
+  const check = (name, ok, detail = '') => { results.checks.push({ name, ok, detail }); console.log(`[smoke:dark] ${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`); };
+  const win = new BaseWindow({ width: 900, height: 700, show: false });
+  const vm = new ViewManager();
+  vm.attach(win);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // The vendored bundle must be the exact self-contained build the app ships.
+  const vroot = path.join(__dirname, '..', 'vendor', 'darkreader');
+  let bytes = 0; let version = '';
+  try { bytes = fs.statSync(path.join(vroot, 'darkreader.js')).size; } catch {}
+  try { version = JSON.parse(fs.readFileSync(path.join(vroot, 'package.json'), 'utf8')).version || ''; } catch {}
+  check('vendored-bundle-present', bytes > 300000, `${bytes} bytes`);
+  check('vendored-version', version === '4.9.133', version || 'unreadable');
+  check('vendored-license-mit', (() => { try { return /MIT License/.test(fs.readFileSync(path.join(vroot, 'LICENSE'), 'utf8')); } catch { return false; } })());
+
+  // A local page whose background is explicitly WHITE. Its baseline colour is known, so "it got
+  // dark" can never be vacuous (a real dashboard that already honours prefers-color-scheme would).
+  // Served over file://, so this check needs no network.
+  const html = '<!doctype html><html><head><style>html,body{background:#ffffff;color:#111111}</style></head><body><h1>probe</h1></body></html>';
+  const p1 = path.join(app.getPath('temp'), 'mam-dark-white.html');
+  const p2 = path.join(app.getPath('temp'), 'mam-dark-white2.html');
+  fs.writeFileSync(p1, html); fs.writeFileSync(p2, html);
+  const toUrl = p => require('url').pathToFileURL(p).href;
+
+  store.settings.darkMode = true; // the create path injects only when this is on
+  vm.create('vercel', 'darkprobe', toUrl(p1), { show: false });
+  const probe = vm.tabs.get(accountKey('vercel', 'darkprobe'));
+  const wc = probe.view.webContents;
+  const bgOf = async () => {
+    try { return await wc.executeJavaScript(`getComputedStyle(document.documentElement).backgroundColor`); } catch { return ''; }
+  };
+  const inWorld = async code => {
+    try { return await wc.executeJavaScriptInIsolatedWorld(dark.DARK_WORLD_ID, [{ code }]); } catch { return undefined; }
+  };
+  await new Promise(r => wc.once('did-finish-load', r));
+  await sleep(3000); // let the engine compute and apply
+
+  const bgOn = await bgOf();
+  check('page-darkens-with-dark-reader', !!bgOn && bgOn !== '' && !/255,\s*255,\s*255/.test(bgOn), bgOn);
+
+  // Invariant 2: the page's own main world must be untouched while darkening is active.
+  const mainGlobal = await wc.executeJavaScript(`typeof window.DarkReader`).catch(() => '');
+  check('main-world-has-no-darkreader-global', mainGlobal === 'undefined', `typeof window.DarkReader = ${mainGlobal}`);
+  const sheetsGetter = await wc.executeJavaScript(`String(Object.getOwnPropertyDescriptor(Document.prototype,'styleSheets').get)`).catch(() => '');
+  check('main-world-stylesheets-getter-native', /native code/.test(sheetsGetter), sheetsGetter.slice(0, 40));
+  // The engine itself lives in the isolated world — exactly where it is supposed to be.
+  const worldType = await inWorld('typeof window.DarkReader');
+  check('engine-runs-in-isolated-world', worldType === 'object', `isolated world typeof = ${worldType}`);
+
+  // Toggling OFF restores the page's own colours, in place (no reload).
+  await dark.disable(wc);
+  await sleep(1500);
+  const bgOff = await bgOf();
+  check('disable-restores-native-colours', /255,\s*255,\s*255/.test(bgOff), `off=${bgOff}`);
+
+  // A cross-origin navigation discards the isolated world and the Dark Reader inside it; the
+  // did-navigate hook must re-inject and re-darken. A second local file is a different origin.
+  await new Promise(r => { wc.once('did-finish-load', r); wc.loadURL(toUrl(p2)).catch(() => {}); });
+  await sleep(3000);
+  const bgNav = await bgOf();
+  check('re-darkens-after-cross-origin-navigation', !!bgNav && !/255,\s*255,\s*255/.test(bgNav), bgNav);
+
+  fs.writeFileSync(path.join(__dirname, '..', 'smoke-report.json'), JSON.stringify(results, null, 2));
+  app.exit(results.checks.every(c => c.ok) ? 0 : 1);
+}
+
 // ---------- smoke restore: app restart, verify partitions persisted ----------
 async function runSmokeRestore() {
   const win = new BaseWindow({ width: 1280, height: 800, show: false });
@@ -875,7 +1005,6 @@ function runInteractive(captureMode = false) {
   const vm = new ViewManager();
   vm.attach(win);
   reloadPlugins(); // Phase 3: service manifests from <userData>/plugins
-  content.setNativeDark(!!store.settings.darkMode); // sites with their own dark theme follow it
   content.loadFilters().then(src => console.log(`[adblock] filters from ${src}: ${content.filters.hosts.size} hosts, ${content.filters.cosmetic.length} cosmetic`));
   win.loadFile(path.join(__dirname, 'ui.html'));
   // Update system: version tracking + release info + explicit user-driven download/install.
@@ -974,7 +1103,7 @@ function runInteractive(captureMode = false) {
     });
   }
   win.on('resize', applyBounds);
-  win.on('close', () => { vm.hibernateAll(); }); // 'close' fires before destruction — contentView is still usable here
+  win.on('close', () => { vm.hibernateAll(); vm.flushSession(); }); // 'close' fires before destruction — contentView is still usable here
 
   // keyboard accelerators work even when a webview has focus
   const menu = Menu.buildFromTemplate([
@@ -1094,6 +1223,14 @@ function runInteractive(captureMode = false) {
     if (!store.settings.saveLogins) return;
     const found = tabForSender(e.sender);
     if (!found || !data || !data.password) return;
+    // A username-less capture (an autofilled form, a stray Enter) must never overwrite a real login
+    // for THIS account. Only this account's own captures count — an imported fallback row belongs to
+    // no account and must not block the user recording their own login.
+    if (!data.username) {
+      const own = creds.candidatesForAccount(found.tab.svc, found.tab.id, data.url)
+        .some(c => c.accountKey === found.key && c.username);
+      if (own) return;
+    }
     // Origin guard: only a login typed on the service's OWN domain may be bound to this account.
     // Without this, a password typed on an OAuth/phishing page reached from the tab would overwrite
     // the account's saved login and later be autofilled into the real service.
@@ -1127,7 +1264,7 @@ function runInteractive(captureMode = false) {
   });
   ipcMain.on('fill-result', () => {});
 
-  ipcMain.handle('fill-login', (_e, key) => {
+  ipcMain.handle('fill-login', (_e, key, credentialId = null) => {
     const t = vm.tabs.get(key);
     if (!t) throw new Error('That tab is asleep — open it first');
     const [svc, id] = key.split('::');
@@ -1135,10 +1272,19 @@ function runInteractive(captureMode = false) {
     if (!originAllowed(svc, pageUrl)) {
       throw new Error(`This tab is on ${creds.hostOf(pageUrl) || 'another site'}, not ${serviceHosts(svc)[0] || 'the service'} — refusing to fill a saved password here`);
     }
-    const cred = creds.forAccount(svc, id, pageUrl);
-    if (!cred) throw new Error('No saved login for this account yet — sign in once and it will be remembered');
+    if (!creds.candidatesForAccount(svc, id, pageUrl).length) throw new Error('No saved login for this account yet — sign in once and it will be remembered');
+    const candidates = creds.candidatesForAccount(svc, id, pageUrl);
+    if (!candidates.length) throw new Error('No saved login matches this account and site');
+    // The user may have navigated since the chooser was rendered. Recompute from the LIVE URL;
+    // if the picked id no longer belongs here, return fresh summaries instead of persisting a stale default.
+    if (credentialId && !candidates.some(c => c.id === credentialId)) {
+      return { choose: creds.candidateSummariesForAccount(svc, id, pageUrl) };
+    }
+    const cred = creds.credentialForAccount(svc, id, pageUrl, credentialId || null);
+    if (!cred) return { choose: creds.candidateSummariesForAccount(svc, id, pageUrl) };
+    if (credentialId) creds.setDefaultForAccount(credentialId, svc, id, pageUrl); // remember only a live-host candidate
     t.view.webContents.send('fill-credential', { username: cred.username, password: cred.password, submit: false });
-    return true;
+    return { filled: cred.username };
   });
   ipcMain.handle('creds-stats', () => creds.stats());
   ipcMain.handle('creds-browsers', () => creds.listChromiumProfiles().map(p => ({ browser: p.browser, profile: p.profile, id: p.loginData })));
@@ -1156,9 +1302,21 @@ function runInteractive(captureMode = false) {
   ipcMain.handle('creds-clear', () => creds.clearAll());
   ipcMain.handle('creds-for-account', (_e, svc, id) => {
     const svcCfg = serviceByKey(svc);
-    const c = creds.forAccount(svc, id, svcCfg && svcCfg.loginUrl);
+    const c = creds.credentialForAccount(svc, id, svcCfg && svcCfg.loginUrl);
     return c ? { username: c.username, host: c.host, source: c.source } : null; // never the password
   });
+  // Credential manager: summaries only, never passwords — the renderer must not hold one.
+  // Imported passwords are classified by host so the manager can filter/group them per service.
+  ipcMain.handle('creds-list', () => creds.listCredentials().map(c => {
+    const accountSvc = c.accountKey ? c.accountKey.split('::')[0] : null;
+    const serviceKeys = accountSvc ? [accountSvc] : allServices()
+      .filter(s => serviceHosts(s.key).some(h => creds.hostRelated(c.host, h)))
+      .map(s => s.key);
+    return { ...c, serviceKeys };
+  }));
+  ipcMain.handle('creds-default', (_e, credentialId, svc, id, hostHint) =>
+    creds.setDefaultForAccount(credentialId, svc, id, hostHint));
+  ipcMain.handle('creds-delete', (_e, credentialId) => creds.deleteCredential(credentialId));
   // ---------- Phase 3: service plugins (JSON manifests) ----------
   ipcMain.handle('plugins-list', () => ({
     dir: plugins.pluginsDir(),
@@ -1228,19 +1386,26 @@ function runInteractive(captureMode = false) {
     return true;
   });
   ipcMain.handle('set-content-setting', (_e, name, value) => {
-    if (!['adBlock', 'darkMode', 'forceDark', 'saveLogins', 'autofill', 'autoUpdate'].includes(name)) throw new Error(`unknown setting: ${name}`);
+    if (!['adBlock', 'darkMode', 'saveLogins', 'autofill', 'autoUpdate'].includes(name)) throw new Error(`unknown setting: ${name}`);
     store.settings[name] = !!value;
     if (name === 'autoUpdate') { store.save(); updater.setAutoUpdate(!!value); vm.emitState(); return !!value; }
-    // Inverting a page that is already dark produces a washed-out light page, so the two modes
-    // are mutually exclusive.
-    if (name === 'forceDark' && value) store.settings.darkMode = false;
-    if (name === 'darkMode' && value) store.settings.forceDark = false;
     store.save();
-    content.setNativeDark(!!store.settings.darkMode);
-    // re-apply to every live tab so the change is visible immediately
-    for (const t of vm.tabs.values()) {
-      if ((name === 'forceDark' || name === 'adBlock') && !value) t.view.webContents.reload(); // injected CSS can only be undone by reloading
-      else content.applyToPage(t.view.webContents, { adBlock: !!store.settings.adBlock, forceDark: !!store.settings.forceDark });
+    if (name === 'darkMode') {
+      // The engine runs in each view's isolated world, so a flip is one enable/disable call per
+      // live tab — no reload. The previous extension path forced a reload of every open tab, which
+      // threw away scroll position and anything typed into a half-filled form.
+      const on = !!value;
+      for (const t of vm.tabs.values()) {
+        if (on) dark.enable(t.view.webContents);
+        else dark.disable(t.view.webContents);
+      }
+    } else if (name === 'adBlock') {
+      // the network layer flips live through its closure; cosmetic CSS needs a re-apply on, and a
+      // reload off (injected CSS can only be undone by reloading)
+      for (const t of vm.tabs.values()) {
+        if (value) content.applyToPage(t.view.webContents, { adBlock: true });
+        else t.view.webContents.reload();
+      }
     }
     vm.emitState();
     return store.settings[name];
@@ -1342,7 +1507,7 @@ function cycleTab(vm, dir) {
 }
 
 // test modes default to an isolated userData: they can never pollute the real registry/partitions
-const TEST_FLAGS = ['--spike', '--smoke', '--smoke-restore', '--smoke-tokens', '--smoke-creds', '--smoke-autofill', '--smoke-updates', '--smoke-services'];
+const TEST_FLAGS = ['--spike', '--smoke', '--smoke-restore', '--smoke-tokens', '--smoke-creds', '--smoke-autofill', '--smoke-updates', '--smoke-services', '--smoke-dark'];
 const testFlag = TEST_FLAGS.find(f => process.argv.includes(f));
 if (testFlag && !process.env.MAM_USER_DATA) {
   const dirName = testFlag === '--smoke-restore' ? 'mam-test-smoke' : `mam-test-${testFlag.slice(2)}`;
@@ -1377,6 +1542,7 @@ if (!gotLock) {
     else if (process.argv.includes('--smoke-autofill')) runSmokeAutofill().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke-updates')) runSmokeUpdates().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke-services')) runSmokeServices().catch(err => { console.error(err); app.exit(1); });
+    else if (process.argv.includes('--smoke-dark')) runSmokeDark().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--capture')) runInteractive(true);
     else runInteractive();
   });

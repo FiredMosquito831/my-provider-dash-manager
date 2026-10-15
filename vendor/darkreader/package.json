@@ -1,0 +1,6 @@
+{
+  "name": "darkreader",
+  "version": "4.9.133",
+  "description": "Vendored Dark Reader API build (UMD darkreader.js). MIT, Copyright (c) Dark Reader Ltd. Source: https://www.npmjs.com/package/darkreader",
+  "license": "MIT"
+}

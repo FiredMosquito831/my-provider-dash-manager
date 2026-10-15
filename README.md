@@ -1,23 +1,30 @@
-# My Provider Dash Manager
+# My Provider Dash Manager — multi-account manager for 37 cloud services
 
-**One desktop app for every account you own.** Keep several Google, Microsoft, AWS, Vercel, Netlify,
-Cloudflare, Supabase, GitHub, npm, Stripe, Gmail, Outlook and Proton Mail accounts (37 services built
-in, any site by URL) signed in at the same time, each in a fully isolated session, and switch between
-them instantly — the way a browser handles tabs, but built around *accounts* instead of pages.
+[![version](https://img.shields.io/github/v/release/FiredMosquito831/my-provider-dash-manager?label=version)](https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest)
+[![npm](https://img.shields.io/npm/v/my-provider-dash-manager)](https://www.npmjs.com/package/my-provider-dash-manager)
+[![downloads](https://img.shields.io/npm/dm/my-provider-dash-manager)](https://www.npmjs.com/package/my-provider-dash-manager)
+[![stars](https://img.shields.io/github/stars/FiredMosquito831/my-provider-dash-manager)](https://github.com/FiredMosquito831/my-provider-dash-manager)
+[![licence](https://img.shields.io/badge/licence-source--available-green)](LICENSE)
+
+**For freelancers, agencies and developers running client plus personal infrastructure:** one desktop
+app for every account you own. Keep several Google, Microsoft, AWS, Vercel, Netlify, Cloudflare,
+Supabase, GitHub, npm, Stripe, Gmail, Outlook and Proton Mail accounts (37 services built in, any
+site by URL) signed in at the same time, each in a fully isolated session, and switch between them
+instantly — the way a browser handles tabs, but built around *accounts* instead of pages.
 
 <sub>Windows desktop app · Electron 43 · local-first · no telemetry, no account, no server ·
 source-available licence: free for personal and commercial use</sub>
 
-![Home — the account rail on the left, every account as a card, the installed version bottom-left](docs/screenshots/home.png)
+![Home — the account rail on the left, every account as a card, the installed version bottom-left](https://raw.githubusercontent.com/FiredMosquito831/my-provider-dash-manager/main/docs/screenshots/home.png)
 
 Further down Home: the **Add an account** picker with every built-in service you are not using yet
 (37 in total, or add any site by URL), the **Updates** panel with the installed version, and the
 saved-login controls. Install with `npx my-provider-dash-manager` or straight from
 [Releases](https://github.com/FiredMosquito831/my-provider-dash-manager/releases) — see [Install](#install).
 
-![Home, scrolled down — the service picker grouped by category, the Updates panel and saved logins](docs/screenshots/services.png)
+![Home, scrolled down — the service picker grouped by category, the Updates panel and saved logins](https://raw.githubusercontent.com/FiredMosquito831/my-provider-dash-manager/main/docs/screenshots/services.png)
 
-![A Gmail account open in the app, with back / forward / reload / dashboard and the address bar in the strip](docs/screenshots/navigation.png)
+![A Gmail account open in the app, with back / forward / reload / dashboard and the address bar in the strip](https://raw.githubusercontent.com/FiredMosquito831/my-provider-dash-manager/main/docs/screenshots/navigation.png)
 
 <sub>Screenshots use a demo profile with placeholder account names.</sub>
 
@@ -127,7 +134,9 @@ Keyboard: `Ctrl+W` sleep tab · `Ctrl+Shift+W` sleep all · `Ctrl+Tab` cycle · 
 ## Features
 
 ### Accounts and sessions
-- **Unlimited accounts per service.** Each account gets its own Chromium storage partition — separate
+
+**Multi-account session isolation** — every account in its own Chromium partition:
+- **Unlimited accounts per service.** Each account gets its own storage partition — separate
   cookies, localStorage, IndexedDB and cache. Accounts can never see each other's session.
 - **Sessions persist across restarts.** Sign in once; you stay signed in (verified by an automated
   restart test that counts real cookies after relaunch).
@@ -170,10 +179,15 @@ Every login page is verified to load inside an isolated partition, landing on a 
 guard trusts (`npm run smoke:services`). Google sign-in was verified against Google's own flow and
 works in the app. Anything else can be added by URL or as a plugin.
 
-### Saved logins
+### Password manager with per-service import
 - **Remembers logins you type** inside an account tab, bound to *that* account, so two accounts on the
   same service refill with different credentials.
 - **Auto-fills sign-in pages** when it recognises one (toggleable), plus a manual fill action.
+- **Manage logins** from Home → Saved logins → *Manage logins…*: every stored login grouped by
+  service, with delete. No password is ever shown.
+- **Choose which login fills:** when more than one matches a site the app asks instead of guessing,
+  and your choice is remembered as that account's default (marked ★ in the manager).
+- **Re-importing updates changed passwords** instead of silently keeping the old one.
 - **Imports existing passwords** from installed Chromium browsers (Chrome, Edge, Brave, Vivaldi,
   Opera) or from a CSV exported by any browser, including Firefox.
 - Encrypted at rest with Windows DPAPI. Passwords never reach the app's own UI process.
@@ -188,7 +202,7 @@ are upload-only), latest deploy state on Vercel, account name plus charges/payou
 The token field says which credential each service expects. Tokens are validated before being stored,
 encrypted with DPAPI, revocable in one click, and never leave the main process.
 
-### Updates
+### Automatic silent updates
 - **Silent in-place updates** by default: downloaded in the background, installed without a wizard
   when the app closes or on **Restart & update**, relaunched on the new version.
 - **Auto-update toggle** for people who want to press every button themselves.
@@ -197,12 +211,17 @@ encrypted with DPAPI, revocable in one click, and never leave the main process.
 - Updates panel on Home: installed vs latest, release notes, progress. Startup and hourly checks
   against the public release feed. The interactive installer is only for first installs.
 
-### Content
+### Built-in ad-blocking and dark mode
 - **Ad-blocking** driven by EasyList (~52,000 blocked hosts plus generic cosmetic rules, refreshed
   weekly), applied per account partition. Main-frame navigation and sign-in infrastructure are never
-  blocked.
-- **Dark mode**: sites that support `prefers-color-scheme` go dark natively, and an optional
-  force-dark inversion covers the ones that don't.
+  blocked. uBlock Origin cannot run inside Electron — its service worker needs browser APIs Electron
+  does not expose — so this built-in blocker covers that need.
+- **Dark mode** for every account tab, powered by Dark Reader's own engine: one toggle on Home
+  applies it everywhere. Flipping it is instant — pages do not reload, so your scroll position and
+  anything half-typed into a form is preserved. It runs Dark Reader inside each tab's isolated
+  session, costing roughly 2 MB per open account. Dark Reader's browser extension cannot run in
+  Electron (its background worker needs APIs Electron does not expose, and its content script
+  would touch the page's own JavaScript), so the engine is bundled and driven directly.
 
 ### Extensibility
 - **Add any service by URL** — it gets its own rail row and isolated per-account sessions.
@@ -242,6 +261,78 @@ http/https only. Nothing syncs anywhere: there is no server, no account and no t
 
 ---
 
+## Requirements
+
+- **Windows 10 or 11** (64-bit). The app is Windows-only today; macOS and Linux are not supported yet.
+- About **350 MB** of memory with all tabs asleep, plus roughly **125 MB per live dashboard** and
+  **2 MB per open account** when dark mode is on. A machine with 8 GB of RAM handles the default
+  five warm tabs comfortably.
+- **Node.js 18+ only for the `npx` route** — the app itself is a standalone Windows executable and
+  needs nothing else installed.
+
+## Frequently asked questions
+
+**Can I be signed into two accounts on the same service at once?**
+Yes. Each account gets its own Chromium storage partition, so both stay signed in simultaneously and
+you switch between them like tabs. Nothing is ever signed out to reach the other.
+
+**How much memory does an extra account use?**
+Roughly 125 MB of private memory per live dashboard (the figure Task Manager reports), on a ~350 MB
+baseline with everything asleep. The app keeps five tabs warm by default and sleeps the rest; slept
+tabs stay in the strip and resume on click.
+
+**Is it safe to store my passwords?**
+Saved logins are encrypted with Windows DPAPI and bound to the account *and* the service's own
+domains — a password typed on an unrelated page reached from a tab is never captured, and a saved
+password is never filled into a page outside the service's domains. DPAPI protects against another
+user on the machine, a stolen disk and casual copying; it does not protect against malware running as
+you, which no desktop app can. Passwords never reach the app's own UI process.
+
+**Does it work on macOS or Linux?**
+Not yet — the app and its installer are Windows-only. The architecture is cross-platform, so other
+operating systems stay open as future work.
+
+**How do I import passwords from Chrome or Edge?**
+Home → *Import from browser* reads installed Chromium browsers directly. Chrome 127 and newer lock
+some entries with app-bound encryption that no other app can read; export those to CSV from the
+browser and use *Import CSV* instead. Firefox always uses the CSV path. Re-importing updates
+passwords you have changed.
+
+**Why does SmartScreen warn me?**
+The installer is not code-signed yet, so Windows shows a warning the first time. Choose **More info →
+Run anyway**. Code signing is planned and removes the warning entirely.
+
+**Can I add a service that is not on the list?**
+Yes — *Add service by URL* gives any site its own rail row and isolated per-account sessions, and
+JSON plugin manifests can define a service plus how to read its API for status cards.
+
+**What happens to my accounts when I update?**
+Nothing is lost. Accounts, sessions, saved logins and settings live in
+`%APPDATA%\multi-acc-manager` and survive updates and reinstalls. Updates install silently in place
+and relaunch the app.
+
+## Compared to the alternatives
+
+| Approach | What it gives you | What it does not |
+|---|---|---|
+| Separate browser profiles | Isolated sessions per profile | One window each, no single place to see every account, no per-account password management |
+| Incognito / private windows | A throwaway session | Nothing persists — you sign in again every time, and juggling windows is manual |
+| Other multi-account managers | Similar switching | Usually extension-based in a normal browser, so one crash or update can take every session with it |
+| **This app** | One window, persistent isolated sessions, a password manager, ad-blocking, dark mode and silent updates | Windows-only, unsigned installer, and no Chrome Web Store extensions (Electron cannot run them) |
+
+## Troubleshooting
+
+- **SmartScreen warns on first run.** Expected while the installer is unsigned: **More info → Run
+  anyway**.
+- **A service will not load inside the app** (Google Cloud Console is a known case). Use the
+  **Browser** button in the strip to open that page in your system browser — it keeps working from
+  there, and the rest of the app is unaffected.
+- **"Which account am I in right now?"** Every tab and rail row is colour-coded and labelled by
+  account, and the tab strip shows the service and account name together. The active tab is
+  highlighted; slept tabs are dimmed.
+
+---
+
 ## Development
 
 ```bash
@@ -249,10 +340,11 @@ npm start              # run the app
 npm run smoke          # sessions, registry, partitions, tab navigation (12 checks)
 npm run smoke:restore  # sessions survive a restart (real cookies)
 npm run smoke:tokens   # DPAPI round-trip + live fake-token rejection per provider (15)
-npm run smoke:creds    # import, per-account recall, encryption at rest (7)
+npm run smoke:creds    # import, per-account recall/selection, defaults, encryption at rest (16)
 npm run smoke:autofill # real page: form detection, fill, capture, origin guard (10)
 npm run smoke:updates  # version comparison, silent-install mode, auto-update toggle, real release-feed check (11)
 npm run smoke:services # every built-in login page loads inside an isolated partition (42)
+npm run smoke:dark     # Dark Reader darkens a white page, stays out of the page's own JS, re-injects after navigation (9)
 npm run capture        # screenshot the running shell (--capture-out, --capture-open svc::id, --capture-js)
 npm run spike          # memory benchmark
 npm run dist           # build the Windows installer locally
@@ -261,7 +353,7 @@ npm start -- --print-paths            # show the app name, version and data fold
 npm start -- --open vercel::personal  # open an account on launch
 ```
 
-The suite is 111 checks across seven modes. `MAM_USER_DATA=<dir>` points any command at an isolated
+The suite is 115 checks across eight modes. `MAM_USER_DATA=<dir>` points any command at an isolated
 profile.
 
 Releases are cut by pushing a `v*` tag: GitHub Actions checks the tag against `package.json`, builds

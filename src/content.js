@@ -1,9 +1,11 @@
-// Native ad-blocking + dark mode (the uBlock Origin / Dark Reader equivalents).
-// Electron cannot load Chrome extensions (see DECISIONS D10), so these are built in:
-//   - blocking: webRequest filter driven by EasyList network rules (||host^ subset)
+// Native ad-blocking + cosmetic filtering (the uBlock Origin equivalent).
+// Electron cannot run uBlock Origin / uBOL (their MV3 service worker dies on Electron's missing
+// chrome.permissions/chrome.commands, and both are GPL-3 — verified by spike), so blocking is built in:
+//   - network: webRequest filter driven by EasyList network rules (||host^ subset)
 //   - cosmetic: generic ##selector rules injected as display:none CSS
-//   - dark mode: nativeTheme dark (sites with their own dark theme) + optional invert filter
-const { app, net, nativeTheme } = require('electron');
+// Dark mode is no longer here: it runs Dark Reader's API build inside each account view's
+// isolated world (see src/darkmode.js, wired from src/main.js).
+const { app, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -127,6 +129,20 @@ function hostBlocked(hostname) {
   }
 }
 
+// A host sits under a shared deployment apex if it is the apex or a subdomain of it. Substring
+// rules are applied to the full URL and would otherwise cancel a resource on the user's own
+// myapp.vercel.app / myapp.pages.dev deployment — invariant 5 says those are never blockable.
+function underNeverBlockApex(hostname) {
+  let h = String(hostname || '').toLowerCase();
+  for (;;) {
+    if (NEVER_BLOCK_APEX.has(h)) return true;
+    const dot = h.indexOf('.');
+    if (dot === -1) return false;
+    h = h.slice(dot + 1);
+    if (!h.includes('.')) return false;
+  }
+}
+
 function shouldBlock(url, resourceType) {
   if (resourceType === 'mainFrame') return false; // never block the page the user asked for
   try {
@@ -134,7 +150,11 @@ function shouldBlock(url, resourceType) {
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
     if (isManaged(u.hostname)) return false; // never block a managed dashboard's own requests
     if (hostBlocked(u.hostname)) return true;
-    // Substring rules are broad and can match legitimate API paths, so they only apply off-site.
+    // Substring rules are broad and can match legitimate API paths, so they only apply off-site —
+    // and never on a host under a shared deployment apex, where a bare substring must not block a
+    // resource of the user's own app (invariant 5). hostBlocked already honours the apex for host
+    // rules; this extends the same protection to the substring path.
+    if (underNeverBlockApex(u.hostname)) return false;
     const lower = url.toLowerCase();
     for (const s of filters.substrings) if (lower.includes(s)) return true;
     return false;
@@ -162,25 +182,14 @@ function cosmeticCss() {
   return `${filters.cosmetic.join(',')}{display:none!important}`;
 }
 
-// Dark Reader-style fallback for sites with no dark theme of their own.
-const FORCE_DARK_CSS = `
-html{filter:invert(1) hue-rotate(180deg)!important;background:#111!important}
-img,video,iframe,svg,canvas,picture,[style*="background-image"]{filter:invert(1) hue-rotate(180deg)!important}
-`;
-
-async function applyToPage(wc, { adBlock, forceDark }) {
+async function applyToPage(wc, { adBlock }) {
   try {
     let host = '';
     try { host = new URL(wc.getURL()).hostname; } catch {}
     // Generic cosmetic selectors are written for ad slots on content sites; on a dashboard they can
     // hide real UI, so skip them on the services this app manages.
     if (adBlock && !isManaged(host)) { const css = cosmeticCss(); if (css) await wc.insertCSS(css); }
-    if (forceDark) await wc.insertCSS(FORCE_DARK_CSS);
   } catch { /* page may have navigated away */ }
 }
 
-function setNativeDark(on) {
-  nativeTheme.themeSource = on ? 'dark' : 'system'; // makes prefers-color-scheme sites go dark natively
-}
-
-module.exports = { loadFilters, attachAdBlock, applyToPage, setNativeDark, setManagedHosts, isManaged, stats, filters };
+module.exports = { loadFilters, attachAdBlock, applyToPage, setManagedHosts, isManaged, stats, filters };

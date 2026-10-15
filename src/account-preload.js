@@ -30,9 +30,18 @@ function setValue(el, v) {
 }
 
 // ---- capture: report credentials the user actually submits ----
-function capture() {
+// A real sign-in only: the password field must sit in the form being submitted (or be the focused
+// field). Enter in an unrelated box or a click on some other button must not capture a stray
+// password — change-password forms and settings pages keep their fields out of this path.
+function capture(e) {
   const { user, pw } = findFields();
   if (!pw || !pw.value) return;
+  if (pw.form) {
+    const t = e && e.target;
+    const inForm = t === pw.form || (t && t.nodeType === 1 && pw.form.contains(t));
+    const focusInForm = document.activeElement === pw || pw.form.contains(document.activeElement);
+    if (!inForm && !focusInForm) return;
+  }
   ipcRenderer.send('credential-captured', {
     url: location.href,
     username: user && user.value ? user.value : '',
@@ -42,10 +51,10 @@ function capture() {
 
 window.addEventListener('submit', capture, true);
 // many dashboards submit via JS, so also capture on Enter and on clicking a submit-ish control
-window.addEventListener('keydown', e => { if (e.key === 'Enter') setTimeout(capture, 0); }, true);
+window.addEventListener('keydown', e => { if (e.key === 'Enter') setTimeout(() => capture(e), 0); }, true);
 window.addEventListener('click', e => {
   const el = e.target && e.target.closest && e.target.closest('button,[type=submit],[role=button]');
-  if (el) setTimeout(capture, 0);
+  if (el) setTimeout(() => capture(e), 0);
 }, true);
 
 // ---- fill: main asks us to put a stored credential into the form ----

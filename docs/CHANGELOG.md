@@ -2,6 +2,50 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.8.0 — 2026-10-15
+
+### Added
+- **Dark mode that actually works, powered by Dark Reader's own engine.** The old "Dark sites" hint
+  and the crude "Force dark" invert filter are replaced by Dark Reader (v4.9.133, MIT). It is *not*
+  loaded as a browser extension — Dark Reader's extension cannot run correctly in Electron (its
+  background worker crashes on APIs Electron does not expose, and its content script would touch
+  the page's own JavaScript, breaking the account-view isolation guarantee). Instead Dark Reader's
+  self-contained API build runs inside each tab's **isolated world**, where it can darken the page
+  but the page's own JavaScript can never see it. One **Dark mode** toggle on Home applies it
+  everywhere, instantly — no reload, so scroll position and half-typed form contents survive. Roughly
+  2 MB per open account (the extension approach measured ~25 MB per partition).
+- **A real password manager.** Home → Saved logins → *Manage logins…* lists every stored login
+  grouped by service, with delete. When more than one login matches a site the app **asks which to
+  fill** instead of silently picking one, and your choice is remembered as that account's default
+  (marked ★ in the manager). Re-importing from a browser or CSV now **updates changed passwords**
+  instead of keeping the stale one.
+- **SEO:** a landing page at `docs/index.html` published to GitHub Pages (meta tags, Open Graph,
+  Twitter card and JSON-LD `SoftwareApplication`), `robots.txt` + `sitemap.xml`, a 1280×640 social
+  preview card, a keyword-rich repository description and 20 topics, and README images switched to
+  absolute URLs so they render on npmjs.com too.
+
+### Changed
+- The two dark-mode buttons ("Dark sites", "Force dark") are one **Dark mode** button.
+- Ad-blocking stays the built-in EasyList blocker. uBlock Origin and uBlock Origin Lite were tested
+  and **cannot work** in Electron: their service worker dies on APIs Electron does not expose
+  (`chrome.permissions`, `chrome.commands`), so nothing blocks. Both are also GPL-3, incompatible
+  with this app's licence.
+
+### Fixed
+- Collapsing a provider group in the top strip no longer collapses the wrong thing in the rail (the
+  scope argument was dropped at the IPC bridge).
+- Autofill no longer hands one account's saved password to a *different* account of the same service.
+- A generic ad-block substring rule can no longer block a resource on your own `*.vercel.app` /
+  `*.pages.dev` deployment.
+- Changing a password in your browser and re-importing no longer leaves the stale password in place.
+- Deleting an account now removes its saved logins, so a re-created account with the same name never
+  inherits the old one's password.
+- The open-tab set is flushed to disk when the window closes, so closing a tab and quitting
+  immediately no longer resurrects it on the next launch.
+- Login capture ignores Enter/click on pages that merely *contain* a password box (change-password
+  and settings pages), not just real sign-in submits.
+- Home no longer scrolls back to the top when a background tab finishes loading.
+
 ## 0.7.0 — 2026-09-07
 
 ### Added

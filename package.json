@@ -1,7 +1,7 @@
 {
   "name": "my-provider-dash-manager",
-  "version": "0.7.0",
-  "description": "Manage many accounts per cloud service (Vercel, Netlify, Supabase, Cloudflare, Railway, Render, GitHub) in one desktop app \u2014 isolated persistent sessions, one tab per account.",
+  "version": "0.8.0",
+  "description": "CLI to install and update My Provider Dash Manager: a free Windows desktop app that keeps many accounts per service (Vercel, Netlify, Supabase, Cloudflare, AWS, Google, Microsoft, GitHub, Gmail) signed in at once, each in a fully isolated session. Also available as mpdm.",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
@@ -17,6 +17,7 @@
     "internal:log": "git --git-dir=.internal-git --work-tree=. log --oneline",
     "smoke:updates": "electron . --smoke-updates",
     "smoke:services": "electron . --smoke-services",
+    "smoke:dark": "electron . --smoke-dark",
     "install:latest": "node scripts/install-latest.js"
   },
   "devDependencies": {
@@ -31,6 +32,7 @@
     "productName": "My Provider Dash Manager",
     "files": [
       "src/**/*",
+      "vendor/**/*",
       "package.json"
     ],
     "win": {
@@ -57,6 +59,7 @@
   "files": [
     "scripts/cli.js",
     "scripts/install-latest.js",
+    "docs/screenshots",
     "README.md",
     "LICENSE"
   ],
@@ -72,17 +75,36 @@
   "keywords": [
     "multi-account",
     "account-manager",
+    "account-switcher",
+    "session-isolation",
+    "browser-profiles",
+    "isolated-sessions",
+    "desktop-app",
+    "electron",
+    "windows",
+    "developer-tools",
+    "dashboard",
+    "ad-block",
+    "adblocker",
+    "dark-mode",
+    "password-manager",
+    "password-importer",
     "vercel",
     "netlify",
     "supabase",
     "cloudflare",
-    "railway",
-    "render",
+    "aws",
+    "azure",
+    "google",
+    "microsoft",
+    "google-cloud",
     "github",
-    "electron",
-    "dashboard",
-    "sessions",
-    "windows"
+    "gitlab",
+    "npm",
+    "stripe",
+    "gmail",
+    "proton-mail",
+    "cli"
   ],
   "os": [
     "win32"

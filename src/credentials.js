@@ -23,12 +23,27 @@ function loadAll() {
     const raw = JSON.parse(fs.readFileSync(credsFile(), 'utf8'));
     if (!raw.ct) return [];
     if (!safeStorage.isEncryptionAvailable()) return [];
-    return JSON.parse(safeStorage.decryptString(Buffer.from(raw.ct, 'base64')));
+    const decoded = JSON.parse(safeStorage.decryptString(Buffer.from(raw.ct, 'base64')));
+    if (!Array.isArray(decoded)) return [];
+    // Add stable encrypted ids/default lists to entries created by older versions. The migration
+    // stays inside the DPAPI-encrypted payload; no password metadata is written to a plaintext sidecar.
+    let migrated = false;
+    const list = decoded.map(c => {
+      if (!c.id) { migrated = true; c.id = crypto.randomUUID(); }
+      if (!Array.isArray(c.defaultForAccounts)) { migrated = true; c.defaultForAccounts = []; }
+      return c;
+    });
+    if (migrated) { try { saveAll(list); } catch {} }
+    return list;
   } catch { return []; }
 }
 
 function saveAll(list) {
   if (!safeStorage.isEncryptionAvailable()) throw new Error('OS secure storage unavailable');
+  for (const c of list) {
+    if (!c.id) c.id = crypto.randomUUID();
+    if (!Array.isArray(c.defaultForAccounts)) c.defaultForAccounts = [];
+  }
   const ct = safeStorage.encryptString(JSON.stringify(list)).toString('base64');
   fs.mkdirSync(path.dirname(credsFile()), { recursive: true });
   fs.writeFileSync(credsFile(), JSON.stringify({ ct, count: list.length, savedAt: new Date().toISOString() }, null, 2));
@@ -41,18 +56,29 @@ function hostOf(url) {
 
 function mergeCredentials(incoming) {
   const list = loadAll();
-  const seen = new Set(list.map(c => `${c.host}|${c.username}`));
-  let added = 0;
-  for (const c of incoming) {
-    if (!c.username || !c.password) continue;
-    const key = `${c.host}|${c.username}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    list.push(c);
+  // Imported rows dedupe against other imported rows only. Never let an import overwrite an
+  // account-captured login that happens to share the same host and username.
+  const idx = new Map();
+  list.forEach((c, i) => { if (!c.accountKey) idx.set(`${c.host}|${c.username}`, i); });
+  let added = 0; let updated = 0;
+  for (const incomingCred of incoming) {
+    if (!incomingCred.username || !incomingCred.password) continue;
+    const key = `${incomingCred.host}|${incomingCred.username}`;
+    const at = idx.get(key);
+    if (at != null) {
+      // Same host+user re-imported with a different password: browser is the newer source of truth.
+      if (list[at].password !== incomingCred.password) {
+        list[at] = { ...incomingCred, id: list[at].id, defaultForAccounts: list[at].defaultForAccounts || [] };
+        updated++;
+      }
+      continue;
+    }
+    idx.set(key, list.length);
+    list.push(incomingCred);
     added++;
   }
   saveAll(list);
-  return { added, total: list.length };
+  return { added, updated, total: list.length };
 }
 
 // ---------- Windows DPAPI (no native module: use .NET via PowerShell) ----------
@@ -249,22 +275,45 @@ async function fillInto(webContents, host, username) {
 // ---------- per-account remembered logins ----------
 // A credential captured inside an account's own view is bound to that account, so each of your
 // accounts on the same service keeps its own login and refills correctly.
+// At most ONE captured login per account: matching on accountKey alone (not username) means a
+// re-login replaces the previous capture instead of piling up entries that forAccount would then
+// pick the first of, forever — the "always force-pastes one specific password" problem.
 function rememberForAccount(svc, id, { url, username, password }) {
   if (!password) return { saved: false };
   const list = loadAll();
   const accountKey = `${svc}::${id}`;
   const host = hostOf(url);
-  const idx = list.findIndex(c => c.accountKey === accountKey && (c.username || '') === (username || ''));
   const entry = {
-    accountKey, host, url, username: username || '', password,
-    source: 'saved in app', importedAt: new Date().toISOString(),
+    id: crypto.randomUUID(), accountKey, host, url, username: username || '', password,
+    source: 'saved in app', importedAt: new Date().toISOString(), defaultForAccounts: [],
   };
+  // Keep separate usernames for the same account so the user can choose among them; re-capturing
+  // the SAME username updates that credential instead of preserving a stale password.
+  const idx = list.findIndex(c => c.accountKey === accountKey && (c.username || '') === entry.username);
   if (idx > -1) {
-    if (list[idx].password === password) return { saved: false }; // unchanged
+    if (list[idx].password === password) return { saved: false };
+    entry.id = list[idx].id;
+    entry.defaultForAccounts = list[idx].defaultForAccounts || [];
     list[idx] = entry;
   } else list.push(entry);
   saveAll(list);
   return { saved: true };
+}
+
+// Drop every credential captured for one account (used when the account is deleted, so a recreated
+// account with the same id never inherits the old one's password).
+function removeForAccount(svc, id) {
+  const key = `${svc}::${id}`;
+  const list = loadAll();
+  const kept = list.filter(c => c.accountKey !== key);
+  let changed = kept.length !== list.length;
+  for (const c of kept) {
+    const defaults = c.defaultForAccounts || [];
+    const next = defaults.filter(k => k !== key);
+    if (next.length !== defaults.length) { c.defaultForAccounts = next; changed = true; }
+  }
+  if (changed) saveAll(kept);
+  return list.length - kept.length;
 }
 
 function hostRelated(a, b) {
@@ -272,17 +321,94 @@ function hostRelated(a, b) {
   return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
 }
 
-// Prefer the login captured for THIS account, but only when it belongs to the site being asked about
-// — a credential must never be handed to an origin unrelated to the one it was saved on. Falls back
-// to an imported credential for the same host.
-function forAccount(svc, id, hostHint) {
-  const list = loadAll();
+// Main-process-only candidate lookup. Never send these objects to the chrome renderer because they
+// contain passwords. Use candidateSummariesForAccount for a chooser projection.
+function candidatesForAccount(svc, id, hostHint) {
   const accountKey = `${svc}::${id}`;
   const host = hostOf(hostHint || '');
-  const own = list.find(c => c.accountKey === accountKey);
-  if (own && (!host || !own.host || hostRelated(own.host, host))) return own;
-  if (!host) return null;
-  return list.find(c => hostRelated(c.host, host)) || null;
+  if (!host) return [];
+  return loadAll()
+    .filter(c => c.host && hostRelated(c.host, host) && (!c.accountKey || c.accountKey === accountKey))
+    .sort((a, b) => Number(b.accountKey === accountKey) - Number(a.accountKey === accountKey));
+}
+
+function candidateSummariesForAccount(svc, id, hostHint) {
+  return candidatesForAccount(svc, id, hostHint).map(c => ({
+    id: c.id, accountKey: c.accountKey || null, host: c.host || '',
+    username: c.username || '', source: c.source || 'unknown',
+    isDefault: (c.defaultForAccounts || []).includes(`${svc}::${id}`),
+  }));
+}
+
+// Resolve only a candidate that belongs to the account+live host. A user's explicit per-account
+// default wins, then that account's own captured login. An imported login is auto-selected only when
+// it is the sole matching imported candidate; ambiguity means no auto-fill and a manual chooser.
+function credentialForAccount(svc, id, hostHint, credentialId = null) {
+  const accountKey = `${svc}::${id}`;
+  const candidates = candidatesForAccount(svc, id, hostHint);
+  if (credentialId) return candidates.find(c => c.id === credentialId) || null;
+  const preferred = candidates.find(c => (c.defaultForAccounts || []).includes(accountKey));
+  if (preferred) return preferred;
+  const own = candidates.filter(c => c.accountKey === accountKey);
+  if (own.length === 1) return own[0];
+  if (own.length > 1) return null; // several captured for this account: ask, never first-wins
+  const imported = candidates.filter(c => !c.accountKey);
+  return imported.length === 1 ? imported[0] : null;
+}
+
+// Backwards-compatible name used by existing autofill call sites.
+function forAccount(svc, id, hostHint) { return credentialForAccount(svc, id, hostHint); }
+
+function setDefaultForAccount(credentialId, svc, id, hostHint) {
+  const accountKey = `${svc}::${id}`;
+  const host = hostOf(hostHint || '');
+  if (credentialId) {
+    if (host) {
+      // normal path: the credential must be a candidate for this account at this site
+      if (!candidatesForAccount(svc, id, hostHint).some(c => c.id === credentialId)) {
+        throw new Error('That login does not match this account and site');
+      }
+    } else {
+      // hostless import (CSV with no url column): it can never be a fill candidate, so validate by
+      // id instead of the host filter — the manager still lets the user mark or clear its default.
+      if (!loadAll().some(c => c.id === credentialId)) throw new Error('That login no longer exists');
+    }
+  }
+  const list = loadAll();
+  let changed = false;
+  for (const c of list) {
+    const defaults = Array.isArray(c.defaultForAccounts) ? c.defaultForAccounts : [];
+    const next = c.id === credentialId
+      ? [...new Set([...defaults.filter(k => k !== accountKey), accountKey])]
+      : defaults.filter(k => k !== accountKey);
+    if (next.length !== defaults.length || next.some((v, i) => v !== defaults[i])) {
+      c.defaultForAccounts = next;
+      changed = true;
+    }
+  }
+  if (changed) saveAll(list);
+  return credentialId || null;
+}
+
+function deleteCredential(credentialId) {
+  const list = loadAll();
+  const next = list.filter(c => c.id !== credentialId);
+  if (next.length === list.length) return false;
+  saveAll(next);
+  return true;
+}
+
+// Safe projection for the chrome renderer. Passwords and raw URLs are never exposed.
+function listCredentials() {
+  return loadAll().map(c => ({
+    id: c.id,
+    host: c.host || '',
+    username: c.username || '',
+    source: c.source || 'unknown',
+    importedAt: c.importedAt || null,
+    accountKey: c.accountKey || null,
+    defaultForAccounts: Array.isArray(c.defaultForAccounts) ? c.defaultForAccounts.slice() : [],
+  }));
 }
 
 function stats() {
@@ -296,6 +422,7 @@ function clearAll() { try { fs.rmSync(credsFile(), { force: true }); } catch {} 
 
 module.exports = {
   listChromiumProfiles, importFromChromium, importFromCsv,
-  matchesFor, fillInto, stats, clearAll, loadAll,
-  rememberForAccount, forAccount, hostOf, hostRelated,
+  matchesFor, fillInto, stats, clearAll, loadAll, listCredentials,
+  rememberForAccount, forAccount, candidatesForAccount, candidateSummariesForAccount, credentialForAccount, credentialFor,
+  setDefaultForAccount, deleteCredential, hostOf, hostRelated, removeForAccount,
 };

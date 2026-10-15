@@ -24,3 +24,6 @@ docs/AUDIT-*.md
 # local tooling state
 .commandcode/
 cap.log
+
+# crash dumps from Git Bash on Windows — never publish these
+*.stackdump
