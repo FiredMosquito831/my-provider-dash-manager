@@ -1,16 +1,22 @@
-# My Provider Dash Manager — multi-account manager for 37 cloud services
+# My Provider Dash Manager — every account. One window.
 
 [![version](https://img.shields.io/github/v/release/FiredMosquito831/my-provider-dash-manager?label=version)](https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest)
+[![site](https://img.shields.io/badge/site-providers.danubelabs.net-6aa8ff)](https://providers.danubelabs.net)
 [![npm](https://img.shields.io/npm/v/my-provider-dash-manager)](https://www.npmjs.com/package/my-provider-dash-manager)
 [![downloads](https://img.shields.io/npm/dm/my-provider-dash-manager)](https://www.npmjs.com/package/my-provider-dash-manager)
 [![stars](https://img.shields.io/github/stars/FiredMosquito831/my-provider-dash-manager)](https://github.com/FiredMosquito831/my-provider-dash-manager)
 [![licence](https://img.shields.io/badge/licence-source--available-green)](LICENSE)
+[![Windows](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078d4)](#requirements)
 
 **For freelancers, agencies and developers running client plus personal infrastructure:** one desktop
 app for every account you own. Keep several Google, Microsoft, AWS, Vercel, Netlify, Cloudflare,
 Supabase, GitHub, npm, Stripe, Gmail, Outlook and Proton Mail accounts (37 services built in, any
 site by URL) signed in at the same time, each in a fully isolated session, and switch between them
 instantly — the way a browser handles tabs, but built around *accounts* instead of pages.
+
+**Website:** [providers.danubelabs.net](https://providers.danubelabs.net) ·
+**Install:** [`npx my-provider-dash-manager`](#install) or [GitHub Releases](https://github.com/FiredMosquito831/my-provider-dash-manager/releases) ·
+**Docs:** [features](https://providers.danubelabs.net/features.html) · [security](https://providers.danubelabs.net/security.html) · [FAQ](https://providers.danubelabs.net/faq.html)
 
 <sub>Windows desktop app · Electron 43 · local-first · no telemetry, no account, no server ·
 source-available licence: free for personal and commercial use</sub>
@@ -26,7 +32,11 @@ saved-login controls. Install with `npx my-provider-dash-manager` or straight fr
 
 ![A Gmail account open in the app, with back / forward / reload / dashboard and the address bar in the strip](https://raw.githubusercontent.com/FiredMosquito831/my-provider-dash-manager/main/docs/screenshots/navigation.png)
 
-<sub>Screenshots use a demo profile with placeholder account names.</sub>
+<sub>Screenshots come from a demo profile on v0.6.x. The service-picker capture shows 27 services
+because that was the registry at the time; the current build has 37. Account names are examples.
+Current UI additions — the single Dark mode toggle and Manage logins — are in the
+[changelog](docs/CHANGELOG.md).</sub>
+
 
 ---
 
@@ -110,7 +120,7 @@ sessions, one place.
 
 ---
 
-## Using it
+## Quickstart
 
 1. **Add an account.** Click **Add account** at the bottom of the rail (or the `+` next to a provider
    you already use), pick the service from the searchable picker, name the account, then choose
@@ -359,6 +369,19 @@ profile.
 Releases are cut by pushing a `v*` tag: GitHub Actions checks the tag against `package.json`, builds
 the NSIS installer, publishes the GitHub release with the update feed, and publishes the npm package
 through npm trusted publishing (OIDC, with a provenance attestation — no tokens involved).
+
+## Links
+
+- **Website:** [providers.danubelabs.net](https://providers.danubelabs.net)
+- **Features:** [providers.danubelabs.net/features.html](https://providers.danubelabs.net/features.html)
+- **Install & requirements:** [providers.danubelabs.net/install.html](https://providers.danubelabs.net/install.html)
+- **Security & privacy:** [providers.danubelabs.net/security.html](https://providers.danubelabs.net/security.html)
+- **FAQ:** [providers.danubelabs.net/faq.html](https://providers.danubelabs.net/faq.html)
+- **Changelog:** [providers.danubelabs.net/changelog.html](https://providers.danubelabs.net/changelog.html) · [docs/CHANGELOG.md](docs/CHANGELOG.md)
+- **Source & issues:** [github.com/FiredMosquito831/my-provider-dash-manager](https://github.com/FiredMosquito831/my-provider-dash-manager)
+- **Releases:** [latest installer](https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest)
+- **npm:** [my-provider-dash-manager](https://www.npmjs.com/package/my-provider-dash-manager)
+- **Design notes:** [DESIGN.md](DESIGN.md)
 
 ## Licence
 

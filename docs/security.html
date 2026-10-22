@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security and privacy — My Provider Dash Manager</title>
+  <meta name="description" content="How session isolation, Windows DPAPI and origin-bound saved logins work — and what they do not protect against. Local-first, no telemetry, no account.">
+  <meta name="keywords" content="multi-account manager, isolated browser sessions, Windows desktop app, account switcher, My Provider Dash Manager, DPAPI, Windows security, local-first, no telemetry, password encryption, origin-bound credentials">
+  <meta name="author" content="FiredMosquito831">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="theme-color" content="#080b11">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="https://providers.danubelabs.net/security.html">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/xml" title="Sitemap" href="sitemap.xml">
+  <link rel="stylesheet" href="assets/site.css">
+  <noscript><style>
+    @media (max-width: 900px) {
+      .topbar-inner { flex-wrap: wrap; padding: 9px 0; }
+      .site-nav { display: flex; position: static; flex-direction: row; flex-wrap: wrap; width: 100%; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+      .nav-toggle { display: none; }
+    }
+  </style></noscript>
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="My Provider Dash Manager">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="Security and privacy — My Provider Dash Manager">
+  <meta property="og:description" content="How session isolation, Windows DPAPI and origin-bound saved logins work — and what they do not protect against. Local-first, no telemetry, no account.">
+  <meta property="og:url" content="https://providers.danubelabs.net/security.html">
+  <meta property="og:image" content="https://providers.danubelabs.net/og.png">
+  <meta property="og:image:secure_url" content="https://providers.danubelabs.net/og.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="My Provider Dash Manager — the account rail and Home screen, presented as a desktop window">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Security and privacy — My Provider Dash Manager">
+  <meta name="twitter:description" content="How session isolation, Windows DPAPI and origin-bound saved logins work — and what they do not protect against. Local-first, no telemetry, no account.">
+  <meta name="twitter:image" content="https://providers.danubelabs.net/og.png">
+  <meta name="twitter:image:alt" content="My Provider Dash Manager — every account in one window">
+
+  <script type="application/ld+json">[{"@context":"https://schema.org","@type":"SoftwareApplication","name":"My Provider Dash Manager","alternateName":"mpdm","url":"https://providers.danubelabs.net/","description":"A free Windows desktop app that keeps many accounts per cloud and web service signed in at the same time, each in its own fully isolated Chromium session, switchable like browser tabs but built around accounts instead of pages.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Multi-account manager","operatingSystem":"Windows 10, Windows 11","softwareVersion":"0.8.0","downloadUrl":"https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest","installUrl":"https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest","codeRepository":"https://github.com/FiredMosquito831/my-provider-dash-manager","isAccessibleForFree":true,"license":"https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/LICENSE","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["Fully isolated persistent Chromium session per account","37 services built in, plus any site by URL","One window with a left account rail and per-account tabs on top","Built-in ad-blocking driven by EasyList","Dark mode powered by Dark Reader","Saved logins encrypted with Windows DPAPI and origin-bound","Import passwords from Chrome, Edge, Brave, Vivaldi, Opera or CSV","Choose which login autofills per account","Optional read-only API tokens for live status cards","Per-account proxy support","Silent in-place auto-updates from GitHub Releases"],"screenshot":[{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/home.png","caption":"Home with the account rail and one card per account"},{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/services.png","caption":"The service picker grouped by category, the Updates panel and saved logins"},{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/navigation.png","caption":"An account tab open with back, forward, reload, dashboard and the address bar"}]},{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://providers.danubelabs.net/"},{"@type":"ListItem","position":2,"name":"Security","item":"https://providers.danubelabs.net/security.html"}]}]</script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar" data-topbar>
+    <div class="topbar-inner">
+      <a class="brand" href="index.html" aria-label="My Provider Dash Manager — home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28" role="img" focusable="false">
+            <rect x="2" y="3" width="28" height="26" rx="5" fill="#0f1722" stroke="#31445c"/>
+            <path d="M2 10h28" stroke="#31445c"/>
+            <rect x="7" y="14" width="5" height="5" rx="1.4" fill="#68a6ff"/>
+            <rect x="14" y="14.5" width="10" height="2" rx="1" fill="#43536a"/>
+            <rect x="7" y="22" width="5" height="3" rx="1.2" fill="#4bd6a3"/>
+            <rect x="14" y="22.5" width="8" height="2" rx="1" fill="#43536a"/>
+            <circle cx="25" cy="6.5" r="1.2" fill="#ff6b6b"/>
+            <circle cx="21.5" cy="6.5" r="1.2" fill="#f2c14e"/>
+            <circle cx="18" cy="6.5" r="1.2" fill="#4bd6a3"/>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <span class="brand-name">Provider Dash</span>
+          <span class="brand-sub">MANAGER · MPDM</span>
+        </span>
+      </a>
+
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-nav-toggle>
+        <span class="nav-toggle-lines" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="sr-only">Toggle navigation</span>
+      </button>
+
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="index.html">Home</a>
+        <a href="features.html">Features</a>
+        <a href="install.html">Install</a>
+        <a href="security.html" class="is-current" aria-current="page">Security</a>
+        <a href="faq.html">FAQ</a>
+        <a href="changelog.html">Changelog</a>
+      </nav>
+
+      <a class="btn btn-small btn-primary topbar-download" href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download <span class="btn-version">v0.8.0</span></a>
+    </div>
+  </header>
+
+  <main id="main">
+<section class="page-hero wrap">
+  <div>
+    <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> Security &amp; privacy</p>
+    <h1>Private by architecture.<br><span class="grad">Honest about limits.</span></h1>
+    <p class="lede">My Provider Dash Manager is a local Windows app, not a hosted account service. There is no server, no app account and no telemetry. This page explains what the isolation and encryption actually protect — and where the boundary is.</p>
+    <ul class="hero-facts">
+      <li>Windows DPAPI at rest</li>
+      <li>One partition per account</li>
+      <li>No telemetry</li>
+    </ul>
+  </div>
+  <aside class="security-summary-card panel">
+    <div class="panel-bar"><span class="panel-label">THE SHORT VERSION</span><span class="window-dots small" aria-hidden="true"><i></i><i></i><i></i></span></div>
+    <ul class="check-list check-list-good">
+      <li><span class="mark" aria-hidden="true">✓</span><span>Separate Chromium session storage per account.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span>Saved logins and API tokens encrypted with Windows DPAPI.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span>Credentials bound to account and origin.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span>Account pages sandboxed with context isolation.</span></li>
+      <li><span class="mark" aria-hidden="true">!</span><span>DPAPI cannot stop malware running as you.</span></li>
+      <li><span class="mark" aria-hidden="true">!</span><span>The installer is not code-signed yet.</span></li>
+    </ul>
+  </aside>
+</section>
+
+<section class="section wrap" id="isolation">
+  <div class="feature-intro">
+    <p class="eyebrow">Session isolation</p>
+    <h2>An account cannot see another account's session.</h2>
+    <p>Each account is rendered from a persistent Chromium partition named <code>persist:&lt;service&gt;__&lt;account&gt;</code>. Cookies (including HttpOnly), localStorage, IndexedDB and cache live in that partition and nowhere else.</p>
+  </div>
+  <div class="security-grid">
+    <article class="detail-card"><h3>Separate storage</h3><p>Two accounts on the same service use two partitions. Signing into one cannot overwrite the other's cookies or leak a session into it.</p></article>
+    <article class="detail-card"><h3>Isolated rendering</h3><p>Account pages run in <code>WebContentsView</code> instances with sandboxing, context isolation and deny-by-default permission handlers.</p></article>
+    <article class="detail-card"><h3>No page access to the app</h3><p>Login capture and filling happen in an isolated-world preload. The page's own JavaScript is not given the app's APIs or saved credentials.</p></article>
+    <article class="detail-card"><h3>Popups stay in the account</h3><p>OAuth and popup URLs open inside the same account's tab and partition, so an SSO hand-off does not silently switch identity.</p></article>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="credentials">
+  <div class="feature-intro">
+    <p class="eyebrow">Passwords &amp; tokens</p>
+    <h2>Encrypted at rest, bound to the right origin.</h2>
+    <p>Saved logins and API tokens are encrypted with Electron's <code>safeStorage</code>, which uses Windows DPAPI. They are decrypted only in the main process; the UI receives summaries and booleans, not the secrets.</p>
+  </div>
+  <div class="split-detail">
+    <ul class="check-list check-list-good">
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>Account-bound:</strong> a login belongs to the account that typed it, so two accounts on one service never share a password.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>Origin-bound:</strong> capture and fill verify the service's own domains. A password typed on an OAuth hop or a look-alike page is not captured as that account's login, and a saved login is not filled outside those domains.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>Validated before storage:</strong> API tokens are checked against the service's read-only endpoint before being saved.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>Revocable:</strong> tokens can be removed in one click. Deleting an account also removes its saved logins.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>Passwords never reach the chrome UI process.</strong> The manager shows which logins exist, not their contents.</span></li>
+    </ul>
+    <div class="report-list">
+      <h3>Storage locations</h3>
+      <div class="path-row"><span>Registry, sessions, settings</span><code>%APPDATA%\multi-acc-manager</code></div>
+      <div class="path-row"><span>Encrypted tokens</span><code>tokens.json</code></div>
+      <div class="path-row"><span>Encrypted saved logins</span><code>credentials.json</code></div>
+      <div class="path-row"><span>Browser session data</span><code>persist:* partitions</code></div>
+      <p class="path-note">No plaintext password file is written. Partition cookie databases are encrypted at rest with an AES-GCM key wrapped by DPAPI.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section wrap" id="threat-model">
+  <div class="feature-intro">
+    <p class="eyebrow">Threat model</p>
+    <h2>What this protects against — and what it cannot.</h2>
+  </div>
+  <div class="table-wrap">
+    <table class="threat-table">
+      <thead><tr><th>Scenario</th><th>Protected?</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Another Windows user on the same PC opens your data folder</td><td><span class="pill pill-good">Yes</span></td><td>DPAPI ties the encryption key to your Windows account.</td></tr>
+        <tr><td>A stolen disk or a copied data folder</td><td><span class="pill pill-good">Yes</span></td><td>Saved secrets and partition data are encrypted at rest.</td></tr>
+        <tr><td>One account's page reads another account's session</td><td><span class="pill pill-good">No path</span></td><td>Separate persistent Chromium partitions; no shared cookie jar.</td></tr>
+        <tr><td>A look-alike page tries to capture a saved password</td><td><span class="pill pill-good">Blocked</span></td><td>Capture and fill are limited to the service's own origins.</td></tr>
+        <tr><td>Malware running as your Windows user</td><td><span class="pill pill-bad">No</span></td><td>It can act as you and reach the same DPAPI-protected data. No desktop app can prevent this.</td></tr>
+        <tr><td>A compromised provider dashboard</td><td><span class="pill pill-bad">No</span></td><td>The app shows the service's real page; it cannot secure the service itself.</td></tr>
+        <tr><td>An unsigned installer is swapped for another executable</td><td><span class="pill pill-warn">Limited</span></td><td>The CLI verifies the download is a Windows executable, but the installer is not code-signed yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="privacy">
+  <div class="feature-intro">
+    <p class="eyebrow">Privacy</p>
+    <h2>Nothing syncs anywhere.</h2>
+    <p>Accounts, open tabs, settings, plugins, saved logins and tokens stay in <code>%APPDATA%\multi-acc-manager</code> on the Windows machine where you signed in.</p>
+  </div>
+  <div class="detail-grid">
+    <article class="detail-card"><h3>No telemetry</h3><p>The app does not send usage analytics, crash telemetry or an installation identifier to a server. Update checks go to the public GitHub release feed.</p></article>
+    <article class="detail-card"><h3>No app account</h3><p>There is nothing to register for. The app does not create an identity of its own; it only hosts the identities you sign into.</p></article>
+    <article class="detail-card"><h3>No sync</h3><p>There is no multi-device sync and no cloud backup. Copying the data folder to another machine does not carry usable DPAPI secrets.</p></article>
+    <article class="detail-card"><h3>No scraping</h3><p>The app is not a scraper and does not automate account creation. Provider status is read only when you add a token, and only through read-only API endpoints.</p></article>
+  </div>
+</section>
+
+<section class="section wrap" id="limitations">
+  <div class="feature-intro">
+    <p class="eyebrow">Limits, stated plainly</p>
+    <h2>Things the product does not claim to solve.</h2>
+  </div>
+  <div class="table-wrap">
+    <table class="threat-table limitations-table">
+      <tbody>
+        <tr><td><strong>Windows only</strong></td><td>Windows 10 and 11, 64-bit. macOS and Linux are not supported yet.</td></tr>
+        <tr><td><strong>Unsigned installer</strong></td><td>SmartScreen warns on first run. Choose More info → Run anyway. Code signing is planned.</td></tr>
+        <tr><td><strong>No Chrome Web Store extensions</strong></td><td>Electron cannot run them. Ad-blocking and Dark Reader's dark-mode engine are built in instead.</td></tr>
+        <tr><td><strong>Google's third-party sign-in rule</strong></td><td>“Continue with Google” is blocked by Google inside embedded browsers. Google's own sign-in works; the Browser button handles stubborn third-party flows.</td></tr>
+        <tr><td><strong>Some dashboards may refuse to load</strong></td><td>Google Cloud Console is a known case. Use the Browser button to finish that flow in your system browser.</td></tr>
+        <tr><td><strong>Provider terms still apply</strong></td><td>Multiple accounts are technically possible, not necessarily permitted. GitHub and Railway are one-account-per-person; use organisations and workspaces.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="reporting">
+  <div class="security-banner panel">
+    <div class="security-copy">
+      <p class="eyebrow">Found a problem?</p>
+      <h2>Report it without publishing the details.</h2>
+      <p>For a non-sensitive bug, open an issue with reproduction steps. For a security report, use the repository's Security tab to start a private advisory where the platform supports it. Please do not post working credentials or exploit details in a public issue.</p>
+      <a class="btn btn-secondary" href="https://github.com/FiredMosquito831/my-provider-dash-manager/issues">Open the issue tracker <span aria-hidden="true">→</span></a>
+    </div>
+    <ul class="security-points">
+      <li><span class="mark" aria-hidden="true">→</span><span>Include the app version and Windows version.</span></li>
+      <li><span class="mark" aria-hidden="true">→</span><span>Describe the account/service involved, never the password or token.</span></li>
+      <li><span class="mark" aria-hidden="true">→</span><span>For sensitive reports, use the repository Security tab.</span></li>
+    </ul>
+  </div>
+</section>
+
+<section class="cta wrap">
+  <div class="cta-inner">
+    <p class="eyebrow">Know the boundary</p>
+    <h2>Use it for what it is good at.</h2>
+    <p>Isolated identities, local storage and no server. Not a defence against malware on your own account.</p>
+    <div class="hero-actions hero-actions-center">
+      <a class="btn btn-primary" href="install.html">Install on Windows</a>
+      <a class="btn btn-secondary" href="faq.html">Read the FAQ</a>
+    </div>
+  </div>
+</section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a class="brand brand-footer" href="index.html" aria-label="My Provider Dash Manager — home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="26" height="26" role="img" focusable="false">
+              <rect x="2" y="3" width="28" height="26" rx="5" fill="#0f1722" stroke="#31445c"/>
+              <path d="M2 10h28" stroke="#31445c"/>
+              <rect x="7" y="14" width="5" height="5" rx="1.4" fill="#68a6ff"/>
+              <rect x="14" y="14.5" width="10" height="2" rx="1" fill="#43536a"/>
+              <rect x="7" y="22" width="5" height="3" rx="1.2" fill="#4bd6a3"/>
+              <rect x="14" y="22.5" width="8" height="2" rx="1" fill="#43536a"/>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <span class="brand-name">My Provider Dash Manager</span>
+            <span class="brand-sub">WINDOWS · LOCAL-FIRST</span>
+          </span>
+        </a>
+        <p>One desktop app for every account you own. Real dashboards, real sessions, each identity in its own isolated Chromium partition.</p>
+      </div>
+
+      <div class="footer-links">
+        <div>
+          <h2 class="footer-heading">Product</h2>
+          <a href="index.html">Home</a>
+          <a href="features.html">Features</a>
+          <a href="install.html">Install &amp; requirements</a>
+          <a href="security.html">Security &amp; privacy</a>
+        </div>
+        <div>
+          <h2 class="footer-heading">Resources</h2>
+          <a href="faq.html">FAQ</a>
+          <a href="changelog.html">Changelog</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download v0.8.0</a>
+          <a href="https://www.npmjs.com/package/my-provider-dash-manager">npm package</a>
+        </div>
+        <div>
+          <h2 class="footer-heading">Project</h2>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager">Source on GitHub</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager#readme">README</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/docs/CHANGELOG.md">Raw changelog</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/LICENSE">Licence</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>© 2026 FiredMosquito831. Source-available; free for personal and commercial use.</p>
+      <p>Not affiliated with any service listed. Windows is a trademark of Microsoft Corporation.</p>
+    </div>
+  </footer>
+
+  <script src="assets/site.js" defer></script>
+</body>
+</html>

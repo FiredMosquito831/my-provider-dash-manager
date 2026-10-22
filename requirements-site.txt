@@ -1,0 +1,7 @@
+# Site-generation dependencies. The product runtime lives in package.json.
+Jinja2==3.1.6
+
+# Open Graph generation only (python scripts/build_site.py --og) also needs Playwright:
+#   python -m pip install playwright
+#   python -m playwright install chromium
+# It is intentionally not a CI dependency because docs/og.png is committed.

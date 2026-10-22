@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #070a0f;
+    --panel: #0d141e;
+    --line: #223044;
+    --text: #edf3fb;
+    --muted: #9fb0c4;
+    --blue: #68a6ff;
+    --green: #4bd6a3;
+  }
+  * { box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; margin: 0; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(900px 500px at 88% 8%, rgba(52, 110, 190, .25), transparent 65%),
+      radial-gradient(700px 400px at 10% 110%, rgba(28, 140, 104, .16), transparent 70%),
+      linear-gradient(135deg, #070a0f 0%, #090e16 48%, #0a1019 100%);
+    color: var(--text);
+    font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+    position: relative;
+  }
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(ellipse at 55% 45%, black 0%, transparent 78%);
+  }
+  .noise {
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.015) 50%, transparent 100%);
+  }
+  .wrap { position: relative; display: grid; grid-template-columns: 565px 1fr; height: 630px; padding: 52px 44px 38px 62px; gap: 44px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px; margin: 0 0 22px;
+    color: #b4c4d8; font-size: 15px; font-weight: 600; letter-spacing: .13em; text-transform: uppercase;
+  }
+  .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 5px rgba(75,214,163,.12); }
+  .sep { color: #5c6c80; }
+  h1 { margin: 0; font-size: 72px; line-height: .98; letter-spacing: -.045em; font-weight: 680; }
+  h1 .grad {
+    background: linear-gradient(100deg, #8ab8ff 0%, #68a6ff 44%, #4bd6a3 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .lede { margin: 24px 0 0; max-width: 500px; color: var(--muted); font-size: 21px; line-height: 1.45; }
+  .lede strong { color: #dbe7f5; font-weight: 650; }
+  .cmd {
+    display: inline-flex; align-items: center; gap: 12px; margin-top: 28px; padding: 13px 18px;
+    background: #0c131d; border: 1px solid #2a3a50; border-radius: 11px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 12px 30px rgba(0,0,0,.28);
+    font-family: "Cascadia Code", "Cascadia Mono", Consolas, monospace; font-size: 18px;
+  }
+  .cmd .prompt { color: #64768c; }
+  .cmd .text { color: #d6e3f4; }
+  .facts { display: flex; gap: 20px; margin: 28px 0 0; padding: 0; list-style: none; color: #93a5ba; font-size: 14px; }
+  .facts li { display: inline-flex; align-items: center; gap: 7px; }
+  .facts li::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #4f6a89; }
+  .brandline { position: absolute; left: 62px; bottom: 35px; display: flex; align-items: center; gap: 11px; color: #8295ab; font-size: 14px; }
+  .brandline .domain { color: #b8c8da; font-family: "Cascadia Code", Consolas, monospace; font-size: 13px; }
+  .dots { display: flex; gap: 5px; }
+  .dots i { width: 7px; height: 7px; border-radius: 50%; display: block; }
+  .visual { position: relative; display: flex; align-items: center; }
+  .glow { position: absolute; inset: 8% -8% 8% 2%; background: radial-gradient(circle at 52% 46%, rgba(82, 141, 220, .34), transparent 66%); filter: blur(28px); }
+  .app {
+    position: relative; width: 100%; border: 1px solid #2b3c52; border-radius: 14px; overflow: hidden;
+    background: #0a1018; box-shadow: 0 30px 80px rgba(0,0,0,.58), inset 0 1px 0 rgba(255,255,255,.05);
+    transform: perspective(1200px) rotateY(-4deg) rotateX(1.5deg); transform-origin: center right;
+  }
+  .bar { height: 35px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #0e1621; border-bottom: 1px solid #233247; }
+  .bar .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .bar .title { flex: 1; color: #6f8299; font-size: 11px; text-align: center; letter-spacing: .02em; }
+  .bar .meta { color: #5f738b; font-family: "Cascadia Code", Consolas, monospace; font-size: 10px; }
+  .screen { aspect-ratio: 1384 / 835; overflow: hidden; background: #0b111a; }
+  .screen img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top left; }
+  .swoosh {
+    position: absolute; right: -35px; bottom: 16px; padding: 10px 16px; border-radius: 10px;
+    background: #0d1621; border: 1px solid #2b3d54; color: #aac0d8; font-size: 13px;
+    box-shadow: 0 14px 28px rgba(0,0,0,.45);
+  }
+  .swoosh strong { color: #e7f0fb; }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="noise"></div>
+  <div class="wrap">
+    <section>
+      <p class="eyebrow"><span class="pulse"></span> Windows desktop app <span class="sep">·</span> v{{ version }}</p>
+      <h1>Every account.<br><span class="grad">One window.</span></h1>
+      <p class="lede">Keep every client, work and personal identity signed in — <strong>{{ service_count }} services</strong>, each in its own isolated Chromium session.</p>
+      <div class="cmd"><span class="prompt">$</span><span class="text">npx my-provider-dash-manager</span></div>
+      <ul class="facts">
+        <li>Windows 10 / 11</li>
+        <li>No telemetry</li>
+        <li>Free to use</li>
+      </ul>
+    </section>
+
+    <section class="visual">
+      <div class="glow"></div>
+      <div class="app">
+        <div class="bar">
+          <span class="dot" style="background:#ff6b6b"></span>
+          <span class="dot" style="background:#f2c14e"></span>
+          <span class="dot" style="background:#4bd6a3"></span>
+          <span class="title">Home — My Provider Dash Manager</span>
+          <span class="meta">v{{ version }}</span>
+        </div>
+        <div class="screen"><img src="/docs/screenshots/home.png" alt=""></div>
+      </div>
+      <div class="swoosh"><strong>Isolated sessions</strong> · one for every account</div>
+    </section>
+  </div>
+
+  <div class="brandline">
+    <span class="dots">
+      <i style="background:#68a6ff"></i><i style="background:#4bd6a3"></i><i style="background:#f2c14e"></i><i style="background:#f6821f"></i><i style="background:#a77dfb"></i><i style="background:#ea4335"></i>
+    </span>
+    <span class="domain">{{ site_host }}</span>
+    <span>· source-available by FiredMosquito831</span>
+  </div>
+</body>
+</html>

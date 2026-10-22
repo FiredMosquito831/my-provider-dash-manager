@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="error-page wrap">
+  <div class="error-window">
+    <div class="app-window-bar">
+      <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="app-window-title">404 — no such account</span>
+      <span class="app-window-meta">MPDM</span>
+    </div>
+    <div class="error-screen">
+      <p class="eyebrow">404</p>
+      <h1>This account<br><span class="grad">is not open.</span></h1>
+      <p class="lede">The page you asked for is not in this profile. It may have moved, or the URL may be mistyped. Nothing was signed out.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="index.html">Back to Home</a>
+        <a class="btn btn-secondary" href="faq.html">Read the FAQ</a>
+      </div>
+      <div class="error-links">
+        <a href="features.html">Features</a>
+        <a href="install.html">Install</a>
+        <a href="security.html">Security</a>
+        <a href="changelog.html">Changelog</a>
+        <a href="{{ repo_url }}">GitHub</a>
+      </div>
+    </div>
+  </div>
+  <aside class="error-rail" aria-label="Suggested pages">
+    <div class="rail-group"><span class="rail-title">Home</span><a class="rail-row" href="index.html"><span class="svc-dot" style="--svc:#68a6ff"></span>Product overview</a></div>
+    <div class="rail-group"><span class="rail-title">Product</span><a class="rail-row" href="features.html"><span class="svc-dot" style="--svc:#4bd6a3"></span>Features</a><a class="rail-row" href="install.html"><span class="svc-dot" style="--svc:#f2c14e"></span>Install</a><a class="rail-row" href="security.html"><span class="svc-dot" style="--svc:#f6821f"></span>Security</a></div>
+    <div class="rail-group"><span class="rail-title">Help</span><a class="rail-row" href="faq.html"><span class="svc-dot" style="--svc:#a77dfb"></span>FAQ</a><a class="rail-row" href="changelog.html"><span class="svc-dot" style="--svc:#3ecf8e"></span>Changelog</a></div>
+  </aside>
+</section>
+{% endblock %}

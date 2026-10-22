@@ -1,0 +1,42 @@
+name: Site build
+
+on:
+  push:
+    branches: [main, revamp]
+    paths:
+      - 'site/**'
+      - 'scripts/build_site.py'
+      - 'requirements-site.txt'
+      - 'docs/**'
+      - 'package.json'
+      - 'src/services.js'
+      - 'src/ui.js'
+      - '.github/workflows/site.yml'
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'scripts/build_site.py'
+      - 'requirements-site.txt'
+      - 'docs/**'
+      - 'package.json'
+      - 'src/services.js'
+      - 'src/ui.js'
+      - '.github/workflows/site.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-site.txt
+      - name: Install site dependencies
+        run: python -m pip install -r requirements-site.txt
+      - name: Build and check committed site output
+        run: python scripts/build_site.py --check

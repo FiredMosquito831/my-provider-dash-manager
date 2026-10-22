@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://firedmosquito831.github.io/my-provider-dash-manager/sitemap.xml
+Sitemap: https://providers.danubelabs.net/sitemap.xml
