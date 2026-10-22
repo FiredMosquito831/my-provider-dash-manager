@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="My Provider Dash Manager">
+  <rect width="32" height="32" rx="7" fill="#0b111a"/>
+  <rect x="3" y="4" width="26" height="24" rx="4" fill="#0f1722" stroke="#31445c"/>
+  <path d="M3 10h26" stroke="#31445c"/>
+  <circle cx="6.7" cy="7" r="1.1" fill="#ff6b6b"/>
+  <circle cx="10.2" cy="7" r="1.1" fill="#f2c14e"/>
+  <circle cx="13.7" cy="7" r="1.1" fill="#4bd6a3"/>
+  <rect x="7" y="14" width="5" height="5" rx="1.4" fill="#68a6ff"/>
+  <rect x="14.5" y="14.5" width="10" height="2" rx="1" fill="#43536a"/>
+  <rect x="7" y="22" width="5" height="3" rx="1.2" fill="#4bd6a3"/>
+  <rect x="14.5" y="22.5" width="8" height="2" rx="1" fill="#43536a"/>
+</svg>

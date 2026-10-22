@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page.title }}</title>
+  <meta name="description" content="{{ page.description }}">
+  <meta name="keywords" content="{{ page.keywords | join(', ') }}">
+  <meta name="author" content="FiredMosquito831">
+  <meta name="robots" content="{% if page.slug == '404' %}noindex, follow{% else %}index, follow, max-image-preview:large{% endif %}">
+  <meta name="theme-color" content="#080b11">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="{{ page.canonical }}">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/xml" title="Sitemap" href="sitemap.xml">
+  <link rel="stylesheet" href="assets/site.css">
+  <noscript><style>
+    @media (max-width: 900px) {
+      .topbar-inner { flex-wrap: wrap; padding: 9px 0; }
+      .site-nav { display: flex; position: static; flex-direction: row; flex-wrap: wrap; width: 100%; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+      .nav-toggle { display: none; }
+    }
+  </style></noscript>
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ product }}">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="{{ page.title }}">
+  <meta property="og:description" content="{{ page.description }}">
+  <meta property="og:url" content="{{ page.canonical }}">
+  <meta property="og:image" content="{{ page.og_image }}">
+  <meta property="og:image:secure_url" content="{{ page.og_image }}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="My Provider Dash Manager — the account rail and Home screen, presented as a desktop window">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ page.title }}">
+  <meta name="twitter:description" content="{{ page.description }}">
+  <meta name="twitter:image" content="{{ page.og_image }}">
+  <meta name="twitter:image:alt" content="My Provider Dash Manager — every account in one window">
+
+  <script type="application/ld+json">{{ jsonld | safe }}</script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar" data-topbar>
+    <div class="topbar-inner">
+      <a class="brand" href="index.html" aria-label="{{ product }} — home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28" role="img" focusable="false">
+            <rect x="2" y="3" width="28" height="26" rx="5" fill="#0f1722" stroke="#31445c"/>
+            <path d="M2 10h28" stroke="#31445c"/>
+            <rect x="7" y="14" width="5" height="5" rx="1.4" fill="#68a6ff"/>
+            <rect x="14" y="14.5" width="10" height="2" rx="1" fill="#43536a"/>
+            <rect x="7" y="22" width="5" height="3" rx="1.2" fill="#4bd6a3"/>
+            <rect x="14" y="22.5" width="8" height="2" rx="1" fill="#43536a"/>
+            <circle cx="25" cy="6.5" r="1.2" fill="#ff6b6b"/>
+            <circle cx="21.5" cy="6.5" r="1.2" fill="#f2c14e"/>
+            <circle cx="18" cy="6.5" r="1.2" fill="#4bd6a3"/>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <span class="brand-name">Provider Dash</span>
+          <span class="brand-sub">MANAGER · MPDM</span>
+        </span>
+      </a>
+
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-nav-toggle>
+        <span class="nav-toggle-lines" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="sr-only">Toggle navigation</span>
+      </button>
+
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        {% for item in pages if item.slug != '404' %}
+        <a href="{{ item.filename }}"{% if item.slug == page.slug %} class="is-current" aria-current="page"{% endif %}>{{ item.nav }}</a>
+        {% endfor %}
+      </nav>
+
+      <a class="btn btn-small btn-primary topbar-download" href="{{ latest_release_url }}">Download <span class="btn-version">v{{ version }}</span></a>
+    </div>
+  </header>
+
+  <main id="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a class="brand brand-footer" href="index.html" aria-label="{{ product }} — home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="26" height="26" role="img" focusable="false">
+              <rect x="2" y="3" width="28" height="26" rx="5" fill="#0f1722" stroke="#31445c"/>
+              <path d="M2 10h28" stroke="#31445c"/>
+              <rect x="7" y="14" width="5" height="5" rx="1.4" fill="#68a6ff"/>
+              <rect x="14" y="14.5" width="10" height="2" rx="1" fill="#43536a"/>
+              <rect x="7" y="22" width="5" height="3" rx="1.2" fill="#4bd6a3"/>
+              <rect x="14" y="22.5" width="8" height="2" rx="1" fill="#43536a"/>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <span class="brand-name">{{ product }}</span>
+            <span class="brand-sub">WINDOWS · LOCAL-FIRST</span>
+          </span>
+        </a>
+        <p>One desktop app for every account you own. Real dashboards, real sessions, each identity in its own isolated Chromium partition.</p>
+      </div>
+
+      <div class="footer-links">
+        <div>
+          <h2 class="footer-heading">Product</h2>
+          <a href="index.html">Home</a>
+          <a href="features.html">Features</a>
+          <a href="install.html">Install &amp; requirements</a>
+          <a href="security.html">Security &amp; privacy</a>
+        </div>
+        <div>
+          <h2 class="footer-heading">Resources</h2>
+          <a href="faq.html">FAQ</a>
+          <a href="changelog.html">Changelog</a>
+          <a href="{{ latest_release_url }}">Download v{{ version }}</a>
+          <a href="{{ npm_url }}">npm package</a>
+        </div>
+        <div>
+          <h2 class="footer-heading">Project</h2>
+          <a href="{{ repo_url }}">Source on GitHub</a>
+          <a href="{{ readme_url }}">README</a>
+          <a href="{{ changelog_url }}">Raw changelog</a>
+          <a href="{{ license_url }}">Licence</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>© 2026 FiredMosquito831. Source-available; free for personal and commercial use.</p>
+      <p>Not affiliated with any service listed. Windows is a trademark of Microsoft Corporation.</p>
+    </div>
+  </footer>
+
+  <script src="assets/site.js" defer></script>
+</body>
+</html>

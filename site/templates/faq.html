@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero wrap">
+  <div>
+    <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> Frequently asked questions</p>
+    <h1>Questions,<br><span class="grad">answered plainly.</span></h1>
+    <p class="lede">What the app does with your sessions, passwords and data — including the parts that are Windows-only, unsigned or deliberately not synced.</p>
+    <ul class="hero-facts">
+      <li>{{ faq | length }} questions</li>
+      <li>Windows 10 / 11</li>
+      <li>v{{ version }}</li>
+    </ul>
+  </div>
+  <aside class="toc" aria-label="Related pages">
+    <p class="toc-title">Go deeper</p>
+    <a href="features.html">Features</a>
+    <a href="install.html">Install &amp; requirements</a>
+    <a href="security.html">Security &amp; privacy</a>
+    <a href="changelog.html">Changelog</a>
+    <a href="{{ issues_url }}">Ask an issue</a>
+  </aside>
+</section>
+
+<section class="section wrap" id="questions">
+  <div class="faq-list faq-list-large">
+    {% for item in faq %}
+    <details class="faq-item"{% if loop.first %} open{% endif %}>
+      <summary>
+        <span class="faq-number">{{ "%02d" | format(loop.index) }}</span>
+        <span>{{ item.q }}</span>
+      </summary>
+      <div class="faq-answer"><p>{{ item.a }}</p></div>
+    </details>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="more">
+  <div class="section-head split-head">
+    <div>
+      <p class="eyebrow">Still deciding?</p>
+      <h2>The long version is on the other pages.</h2>
+    </div>
+    <p>Every claim here comes from the app's README, design notes or source. Where a limitation exists, it is listed rather than rounded away.</p>
+  </div>
+  <div class="detail-grid">
+    <a class="detail-card detail-link" href="features.html"><h3>Features</h3><p>Isolation, layout, the password manager, status cards, updates, ad-blocking and extensibility.</p><span class="card-link">Explore features <span aria-hidden="true">→</span></span></a>
+    <a class="detail-card detail-link" href="install.html"><h3>Install</h3><p>npx and installer routes, requirements, update paths, the CLI and where your data lives.</p><span class="card-link">Install guide <span aria-hidden="true">→</span></span></a>
+    <a class="detail-card detail-link" href="security.html"><h3>Security</h3><p>DPAPI, origin-bound credentials, session isolation and the honest threat model.</p><span class="card-link">Security model <span aria-hidden="true">→</span></span></a>
+  </div>
+</section>
+
+<section class="cta wrap">
+  <div class="cta-inner">
+    <p class="eyebrow">No account required</p>
+    <h2>Try it with one real identity.</h2>
+    <p>Download v{{ version }}, add one account, and see whether the rail earns its place in your day.</p>
+    <div class="hero-actions hero-actions-center">
+      <a class="btn btn-primary" href="{{ latest_release_url }}">Download for Windows</a>
+      <a class="btn btn-secondary" href="{{ repo_url }}">View source</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

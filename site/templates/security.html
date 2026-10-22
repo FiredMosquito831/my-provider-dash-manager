@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero wrap">
+  <div>
+    <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> Security &amp; privacy</p>
+    <h1>Private by architecture.<br><span class="grad">Honest about limits.</span></h1>
+    <p class="lede">{{ product }} is a local Windows app, not a hosted account service. There is no server, no app account and no telemetry. This page explains what the isolation and encryption actually protect — and where the boundary is.</p>
+    <ul class="hero-facts">
+      <li>Windows DPAPI at rest</li>
+      <li>One partition per account</li>
+      <li>No telemetry</li>
+    </ul>
+  </div>
+  <aside class="security-summary-card panel">
+    <div class="panel-bar"><span class="panel-label">THE SHORT VERSION</span><span class="window-dots small" aria-hidden="true"><i></i><i></i><i></i></span></div>
+    <ul class="check-list check-list-good">
+      <li><span class="mark" aria-hidden="true">✓</span><span>Separate Chromium session storage per account.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span>Saved logins and API tokens encrypted with Windows DPAPI.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span>Credentials bound to account and origin.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span>Account pages sandboxed with context isolation.</span></li>
+      <li><span class="mark" aria-hidden="true">!</span><span>DPAPI cannot stop malware running as you.</span></li>
+      <li><span class="mark" aria-hidden="true">!</span><span>The installer is not code-signed yet.</span></li>
+    </ul>
+  </aside>
+</section>
+
+<section class="section wrap" id="isolation">
+  <div class="feature-intro">
+    <p class="eyebrow">Session isolation</p>
+    <h2>An account cannot see another account's session.</h2>
+    <p>Each account is rendered from a persistent Chromium partition named <code>persist:&lt;service&gt;__&lt;account&gt;</code>. Cookies (including HttpOnly), localStorage, IndexedDB and cache live in that partition and nowhere else.</p>
+  </div>
+  <div class="security-grid">
+    <article class="detail-card"><h3>Separate storage</h3><p>Two accounts on the same service use two partitions. Signing into one cannot overwrite the other's cookies or leak a session into it.</p></article>
+    <article class="detail-card"><h3>Isolated rendering</h3><p>Account pages run in <code>WebContentsView</code> instances with sandboxing, context isolation and deny-by-default permission handlers.</p></article>
+    <article class="detail-card"><h3>No page access to the app</h3><p>Login capture and filling happen in an isolated-world preload. The page's own JavaScript is not given the app's APIs or saved credentials.</p></article>
+    <article class="detail-card"><h3>Popups stay in the account</h3><p>OAuth and popup URLs open inside the same account's tab and partition, so an SSO hand-off does not silently switch identity.</p></article>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="credentials">
+  <div class="feature-intro">
+    <p class="eyebrow">Passwords &amp; tokens</p>
+    <h2>Encrypted at rest, bound to the right origin.</h2>
+    <p>Saved logins and API tokens are encrypted with Electron's <code>safeStorage</code>, which uses Windows DPAPI. They are decrypted only in the main process; the UI receives summaries and booleans, not the secrets.</p>
+  </div>
+  <div class="split-detail">
+    <ul class="check-list check-list-good">
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>Account-bound:</strong> a login belongs to the account that typed it, so two accounts on one service never share a password.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>Origin-bound:</strong> capture and fill verify the service's own domains. A password typed on an OAuth hop or a look-alike page is not captured as that account's login, and a saved login is not filled outside those domains.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>Validated before storage:</strong> API tokens are checked against the service's read-only endpoint before being saved.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>Revocable:</strong> tokens can be removed in one click. Deleting an account also removes its saved logins.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>Passwords never reach the chrome UI process.</strong> The manager shows which logins exist, not their contents.</span></li>
+    </ul>
+    <div class="report-list">
+      <h3>Storage locations</h3>
+      <div class="path-row"><span>Registry, sessions, settings</span><code>%APPDATA%\multi-acc-manager</code></div>
+      <div class="path-row"><span>Encrypted tokens</span><code>tokens.json</code></div>
+      <div class="path-row"><span>Encrypted saved logins</span><code>credentials.json</code></div>
+      <div class="path-row"><span>Browser session data</span><code>persist:* partitions</code></div>
+      <p class="path-note">No plaintext password file is written. Partition cookie databases are encrypted at rest with an AES-GCM key wrapped by DPAPI.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section wrap" id="threat-model">
+  <div class="feature-intro">
+    <p class="eyebrow">Threat model</p>
+    <h2>What this protects against — and what it cannot.</h2>
+  </div>
+  <div class="table-wrap">
+    <table class="threat-table">
+      <thead><tr><th>Scenario</th><th>Protected?</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Another Windows user on the same PC opens your data folder</td><td><span class="pill pill-good">Yes</span></td><td>DPAPI ties the encryption key to your Windows account.</td></tr>
+        <tr><td>A stolen disk or a copied data folder</td><td><span class="pill pill-good">Yes</span></td><td>Saved secrets and partition data are encrypted at rest.</td></tr>
+        <tr><td>One account's page reads another account's session</td><td><span class="pill pill-good">No path</span></td><td>Separate persistent Chromium partitions; no shared cookie jar.</td></tr>
+        <tr><td>A look-alike page tries to capture a saved password</td><td><span class="pill pill-good">Blocked</span></td><td>Capture and fill are limited to the service's own origins.</td></tr>
+        <tr><td>Malware running as your Windows user</td><td><span class="pill pill-bad">No</span></td><td>It can act as you and reach the same DPAPI-protected data. No desktop app can prevent this.</td></tr>
+        <tr><td>A compromised provider dashboard</td><td><span class="pill pill-bad">No</span></td><td>The app shows the service's real page; it cannot secure the service itself.</td></tr>
+        <tr><td>An unsigned installer is swapped for another executable</td><td><span class="pill pill-warn">Limited</span></td><td>The CLI verifies the download is a Windows executable, but the installer is not code-signed yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="privacy">
+  <div class="feature-intro">
+    <p class="eyebrow">Privacy</p>
+    <h2>Nothing syncs anywhere.</h2>
+    <p>Accounts, open tabs, settings, plugins, saved logins and tokens stay in <code>%APPDATA%\multi-acc-manager</code> on the Windows machine where you signed in.</p>
+  </div>
+  <div class="detail-grid">
+    <article class="detail-card"><h3>No telemetry</h3><p>The app does not send usage analytics, crash telemetry or an installation identifier to a server. Update checks go to the public GitHub release feed.</p></article>
+    <article class="detail-card"><h3>No app account</h3><p>There is nothing to register for. The app does not create an identity of its own; it only hosts the identities you sign into.</p></article>
+    <article class="detail-card"><h3>No sync</h3><p>There is no multi-device sync and no cloud backup. Copying the data folder to another machine does not carry usable DPAPI secrets.</p></article>
+    <article class="detail-card"><h3>No scraping</h3><p>The app is not a scraper and does not automate account creation. Provider status is read only when you add a token, and only through read-only API endpoints.</p></article>
+  </div>
+</section>
+
+<section class="section wrap" id="limitations">
+  <div class="feature-intro">
+    <p class="eyebrow">Limits, stated plainly</p>
+    <h2>Things the product does not claim to solve.</h2>
+  </div>
+  <div class="table-wrap">
+    <table class="threat-table limitations-table">
+      <tbody>
+        <tr><td><strong>Windows only</strong></td><td>Windows 10 and 11, 64-bit. macOS and Linux are not supported yet.</td></tr>
+        <tr><td><strong>Unsigned installer</strong></td><td>SmartScreen warns on first run. Choose More info → Run anyway. Code signing is planned.</td></tr>
+        <tr><td><strong>No Chrome Web Store extensions</strong></td><td>Electron cannot run them. Ad-blocking and Dark Reader's dark-mode engine are built in instead.</td></tr>
+        <tr><td><strong>Google's third-party sign-in rule</strong></td><td>“Continue with Google” is blocked by Google inside embedded browsers. Google's own sign-in works; the Browser button handles stubborn third-party flows.</td></tr>
+        <tr><td><strong>Some dashboards may refuse to load</strong></td><td>Google Cloud Console is a known case. Use the Browser button to finish that flow in your system browser.</td></tr>
+        <tr><td><strong>Provider terms still apply</strong></td><td>Multiple accounts are technically possible, not necessarily permitted. GitHub and Railway are one-account-per-person; use organisations and workspaces.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="reporting">
+  <div class="security-banner panel">
+    <div class="security-copy">
+      <p class="eyebrow">Found a problem?</p>
+      <h2>Report it without publishing the details.</h2>
+      <p>For a non-sensitive bug, open an issue with reproduction steps. For a security report, use the repository's Security tab to start a private advisory where the platform supports it. Please do not post working credentials or exploit details in a public issue.</p>
+      <a class="btn btn-secondary" href="{{ issues_url }}">Open the issue tracker <span aria-hidden="true">→</span></a>
+    </div>
+    <ul class="security-points">
+      <li><span class="mark" aria-hidden="true">→</span><span>Include the app version and Windows version.</span></li>
+      <li><span class="mark" aria-hidden="true">→</span><span>Describe the account/service involved, never the password or token.</span></li>
+      <li><span class="mark" aria-hidden="true">→</span><span>For sensitive reports, use the repository Security tab.</span></li>
+    </ul>
+  </div>
+</section>
+
+<section class="cta wrap">
+  <div class="cta-inner">
+    <p class="eyebrow">Know the boundary</p>
+    <h2>Use it for what it is good at.</h2>
+    <p>Isolated identities, local storage and no server. Not a defence against malware on your own account.</p>
+    <div class="hero-actions hero-actions-center">
+      <a class="btn btn-primary" href="install.html">Install on Windows</a>
+      <a class="btn btn-secondary" href="faq.html">Read the FAQ</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

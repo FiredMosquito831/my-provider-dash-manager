@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero wrap">
+  <div>
+    <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> Changelog &amp; links</p>
+    <h1>What changed,<br><span class="grad">and where to find it.</span></h1>
+    <p class="lede">Release notes are generated from the repository changelog. The current release is v{{ version }}; every older release remains listed and linked on GitHub.</p>
+    <ul class="hero-facts">
+      <li>Latest v{{ latest_release.version }}</li>
+      <li>{{ latest_release.date }}</li>
+      <li>{{ releases | length }} documented releases</li>
+    </ul>
+  </div>
+  <aside class="release-card panel">
+    <div class="panel-bar"><span class="panel-label">CURRENT RELEASE</span><span class="window-dots small" aria-hidden="true"><i></i><i></i><i></i></span></div>
+    <p class="release-version">v{{ latest_release.version }}</p>
+    <p class="release-date">{{ latest_release.date }}</p>
+    <a class="btn btn-primary" href="{{ latest_release.url }}">Release on GitHub</a>
+    <a class="btn btn-secondary" href="{{ changelog_url }}">Raw CHANGELOG.md</a>
+  </aside>
+</section>
+
+<section class="section wrap" id="latest">
+  <div class="section-head split-head">
+    <div>
+      <p class="eyebrow">Latest release</p>
+      <h2>v{{ latest_release.version }} — {{ latest_release.date }}</h2>
+    </div>
+    <p><a href="{{ latest_release_url }}">Download the current installer <span aria-hidden="true">→</span></a></p>
+  </div>
+  <div class="release-notes">
+    {{ latest_release_html | safe }}
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="history">
+  <div class="section-head">
+    <p class="eyebrow">Release history</p>
+    <h2>Every documented version.</h2>
+  </div>
+  <ol class="release-list">
+    {% for release in releases[1:] %}
+    <li>
+      <a href="{{ release.url }}">
+        <span class="release-list-version">v{{ release.version }}</span>
+        <span class="release-list-date">{{ release.date }}</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ol>
+  <p class="shot-disclaimer">Dates and versions are read from <code>docs/CHANGELOG.md</code> at build time. The site build uses the package version ({{ version }}) and never invents release numbers.</p>
+</section>
+
+<section class="section wrap" id="links">
+  <div class="section-head">
+    <p class="eyebrow">Elsewhere</p>
+    <h2>Project links.</h2>
+  </div>
+  <div class="link-grid">
+    <a class="link-card" href="{{ repo_url }}"><span class="link-kicker">SOURCE</span><strong>GitHub repository</strong><span>Issues, releases, source and licence.</span><span class="card-link">Open GitHub <span aria-hidden="true">↗</span></span></a>
+    <a class="link-card" href="{{ latest_release_url }}"><span class="link-kicker">DOWNLOAD</span><strong>Latest release</strong><span>The Windows installer and release notes for v{{ version }}.</span><span class="card-link">Open Releases <span aria-hidden="true">↗</span></span></a>
+    <a class="link-card" href="{{ npm_url }}"><span class="link-kicker">PACKAGE</span><strong>npm</strong><span><code>my-provider-dash-manager</code> and the <code>mpdm</code> alias.</span><span class="card-link">Open npm <span aria-hidden="true">↗</span></span></a>
+    <a class="link-card" href="{{ changelog_url }}"><span class="link-kicker">NOTES</span><strong>Full changelog</strong><span>Every release note in one Markdown file.</span><span class="card-link">Read changelog <span aria-hidden="true">↗</span></span></a>
+    <a class="link-card" href="{{ design_url }}"><span class="link-kicker">DESIGN</span><strong>Architecture notes</strong><span>Partitions, security invariants, memory measurements and decisions.</span><span class="card-link">Read DESIGN.md <span aria-hidden="true">↗</span></span></a>
+    <a class="link-card" href="{{ license_url }}"><span class="link-kicker">LICENCE</span><strong>Source-available licence</strong><span>Free personal and commercial use; no modified redistribution.</span><span class="card-link">Read licence <span aria-hidden="true">↗</span></span></a>
+  </div>
+</section>
+
+<section class="cta wrap">
+  <div class="cta-inner">
+    <p class="eyebrow">Current release</p>
+    <h2>v{{ version }} is ready.</h2>
+    <p>Install or update in one command, or take the installer from GitHub Releases.</p>
+    <div class="command command-center" data-command>
+      <span class="command-prompt" aria-hidden="true">$</span>
+      <code>npx my-provider-dash-manager</code>
+      <button class="copy-button" type="button" data-copy="npx my-provider-dash-manager" aria-label="Copy install command">Copy</button>
+      <span class="copy-status" role="status" aria-live="polite"></span>
+    </div>
+    <div class="hero-actions hero-actions-center">
+      <a class="btn btn-primary" href="{{ latest_release_url }}">Download v{{ version }}</a>
+      <a class="btn btn-secondary" href="install.html">Install guide</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

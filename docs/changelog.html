@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Changelog and links — My Provider Dash Manager</title>
+  <meta name="description" content="Release notes and links for My Provider Dash Manager, generated from the repository changelog, with every documented version and the current download.">
+  <meta name="keywords" content="multi-account manager, isolated browser sessions, Windows desktop app, account switcher, My Provider Dash Manager, changelog, release notes, npm package, source available">
+  <meta name="author" content="FiredMosquito831">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="theme-color" content="#080b11">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="https://providers.danubelabs.net/changelog.html">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/xml" title="Sitemap" href="sitemap.xml">
+  <link rel="stylesheet" href="assets/site.css">
+  <noscript><style>
+    @media (max-width: 900px) {
+      .topbar-inner { flex-wrap: wrap; padding: 9px 0; }
+      .site-nav { display: flex; position: static; flex-direction: row; flex-wrap: wrap; width: 100%; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+      .nav-toggle { display: none; }
+    }
+  </style></noscript>
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="My Provider Dash Manager">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="Changelog and links — My Provider Dash Manager">
+  <meta property="og:description" content="Release notes and links for My Provider Dash Manager, generated from the repository changelog, with every documented version and the current download.">
+  <meta property="og:url" content="https://providers.danubelabs.net/changelog.html">
+  <meta property="og:image" content="https://providers.danubelabs.net/og.png">
+  <meta property="og:image:secure_url" content="https://providers.danubelabs.net/og.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="My Provider Dash Manager — the account rail and Home screen, presented as a desktop window">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Changelog and links — My Provider Dash Manager">
+  <meta name="twitter:description" content="Release notes and links for My Provider Dash Manager, generated from the repository changelog, with every documented version and the current download.">
+  <meta name="twitter:image" content="https://providers.danubelabs.net/og.png">
+  <meta name="twitter:image:alt" content="My Provider Dash Manager — every account in one window">
+
+  <script type="application/ld+json">[{"@context":"https://schema.org","@type":"SoftwareApplication","name":"My Provider Dash Manager","alternateName":"mpdm","url":"https://providers.danubelabs.net/","description":"A free Windows desktop app that keeps many accounts per cloud and web service signed in at the same time, each in its own fully isolated Chromium session, switchable like browser tabs but built around accounts instead of pages.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Multi-account manager","operatingSystem":"Windows 10, Windows 11","softwareVersion":"0.8.0","downloadUrl":"https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest","installUrl":"https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest","codeRepository":"https://github.com/FiredMosquito831/my-provider-dash-manager","isAccessibleForFree":true,"license":"https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/LICENSE","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["Fully isolated persistent Chromium session per account","37 services built in, plus any site by URL","One window with a left account rail and per-account tabs on top","Built-in ad-blocking driven by EasyList","Dark mode powered by Dark Reader","Saved logins encrypted with Windows DPAPI and origin-bound","Import passwords from Chrome, Edge, Brave, Vivaldi, Opera or CSV","Choose which login autofills per account","Optional read-only API tokens for live status cards","Per-account proxy support","Silent in-place auto-updates from GitHub Releases"],"screenshot":[{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/home.png","caption":"Home with the account rail and one card per account"},{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/services.png","caption":"The service picker grouped by category, the Updates panel and saved logins"},{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/navigation.png","caption":"An account tab open with back, forward, reload, dashboard and the address bar"}]},{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://providers.danubelabs.net/"},{"@type":"ListItem","position":2,"name":"Changelog","item":"https://providers.danubelabs.net/changelog.html"}]}]</script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar" data-topbar>
+    <div class="topbar-inner">
+      <a class="brand" href="index.html" aria-label="My Provider Dash Manager — home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28" role="img" focusable="false">
+            <rect x="2" y="3" width="28" height="26" rx="5" fill="#0f1722" stroke="#31445c"/>
+            <path d="M2 10h28" stroke="#31445c"/>
+            <rect x="7" y="14" width="5" height="5" rx="1.4" fill="#68a6ff"/>
+            <rect x="14" y="14.5" width="10" height="2" rx="1" fill="#43536a"/>
+            <rect x="7" y="22" width="5" height="3" rx="1.2" fill="#4bd6a3"/>
+            <rect x="14" y="22.5" width="8" height="2" rx="1" fill="#43536a"/>
+            <circle cx="25" cy="6.5" r="1.2" fill="#ff6b6b"/>
+            <circle cx="21.5" cy="6.5" r="1.2" fill="#f2c14e"/>
+            <circle cx="18" cy="6.5" r="1.2" fill="#4bd6a3"/>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <span class="brand-name">Provider Dash</span>
+          <span class="brand-sub">MANAGER · MPDM</span>
+        </span>
+      </a>
+
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-nav-toggle>
+        <span class="nav-toggle-lines" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="sr-only">Toggle navigation</span>
+      </button>
+
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="index.html">Home</a>
+        <a href="features.html">Features</a>
+        <a href="install.html">Install</a>
+        <a href="security.html">Security</a>
+        <a href="faq.html">FAQ</a>
+        <a href="changelog.html" class="is-current" aria-current="page">Changelog</a>
+      </nav>
+
+      <a class="btn btn-small btn-primary topbar-download" href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download <span class="btn-version">v0.8.0</span></a>
+    </div>
+  </header>
+
+  <main id="main">
+<section class="page-hero wrap">
+  <div>
+    <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> Changelog &amp; links</p>
+    <h1>What changed,<br><span class="grad">and where to find it.</span></h1>
+    <p class="lede">Release notes are generated from the repository changelog. The current release is v0.8.0; every older release remains listed and linked on GitHub.</p>
+    <ul class="hero-facts">
+      <li>Latest v0.8.0</li>
+      <li>2026-10-15</li>
+      <li>21 documented releases</li>
+    </ul>
+  </div>
+  <aside class="release-card panel">
+    <div class="panel-bar"><span class="panel-label">CURRENT RELEASE</span><span class="window-dots small" aria-hidden="true"><i></i><i></i><i></i></span></div>
+    <p class="release-version">v0.8.0</p>
+    <p class="release-date">2026-10-15</p>
+    <a class="btn btn-primary" href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.8.0">Release on GitHub</a>
+    <a class="btn btn-secondary" href="https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/docs/CHANGELOG.md">Raw CHANGELOG.md</a>
+  </aside>
+</section>
+
+<section class="section wrap" id="latest">
+  <div class="section-head split-head">
+    <div>
+      <p class="eyebrow">Latest release</p>
+      <h2>v0.8.0 — 2026-10-15</h2>
+    </div>
+    <p><a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download the current installer <span aria-hidden="true">→</span></a></p>
+  </div>
+  <div class="release-notes">
+    <h3>Added</h3>
+<ul><li><strong>Dark mode that actually works, powered by Dark Reader's own engine.</strong> The old "Dark sites" hint and the crude "Force dark" invert filter are replaced by Dark Reader (v4.9.133, MIT). It is <em>not</em> loaded as a browser extension — Dark Reader's extension cannot run correctly in Electron (its background worker crashes on APIs Electron does not expose, and its content script would touch the page's own JavaScript, breaking the account-view isolation guarantee). Instead Dark Reader's self-contained API build runs inside each tab's <strong>isolated world</strong>, where it can darken the page but the page's own JavaScript can never see it. One <strong>Dark mode</strong> toggle on Home applies it everywhere, instantly — no reload, so scroll position and half-typed form contents survive. Roughly 2 MB per open account (the extension approach measured ~25 MB per partition).</li><li><strong>A real password manager.</strong> Home → Saved logins → <em>Manage logins…</em> lists every stored login grouped by service, with delete. When more than one login matches a site the app <strong>asks which to fill</strong> instead of silently picking one, and your choice is remembered as that account's default (marked ★ in the manager). Re-importing from a browser or CSV now <strong>updates changed passwords</strong> instead of keeping the stale one.</li><li><strong>SEO:</strong> a landing page at <code>docs/index.html</code> published to GitHub Pages (meta tags, Open Graph, Twitter card and JSON-LD <code>SoftwareApplication</code>), <code>robots.txt</code> + <code>sitemap.xml</code>, a 1280×640 social preview card, a keyword-rich repository description and 20 topics, and README images switched to absolute URLs so they render on npmjs.com too.</li></ul>
+<h3>Changed</h3>
+<ul><li>The two dark-mode buttons ("Dark sites", "Force dark") are one <strong>Dark mode</strong> button.</li><li>Ad-blocking stays the built-in EasyList blocker. uBlock Origin and uBlock Origin Lite were tested and <strong>cannot work</strong> in Electron: their service worker dies on APIs Electron does not expose (<code>chrome.permissions</code>, <code>chrome.commands</code>), so nothing blocks. Both are also GPL-3, incompatible with this app's licence.</li></ul>
+<h3>Fixed</h3>
+<ul><li>Collapsing a provider group in the top strip no longer collapses the wrong thing in the rail (the scope argument was dropped at the IPC bridge).</li><li>Autofill no longer hands one account's saved password to a <em>different</em> account of the same service.</li><li>A generic ad-block substring rule can no longer block a resource on your own <code><em>.vercel.app</code> / <code></em>.pages.dev</code> deployment.</li><li>Changing a password in your browser and re-importing no longer leaves the stale password in place.</li><li>Deleting an account now removes its saved logins, so a re-created account with the same name never inherits the old one's password.</li><li>The open-tab set is flushed to disk when the window closes, so closing a tab and quitting immediately no longer resurrects it on the next launch.</li><li>Login capture ignores Enter/click on pages that merely <em>contain</em> a password box (change-password and settings pages), not just real sign-in submits.</li><li>Home no longer scrolls back to the top when a background tab finishes loading.</li></ul>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="history">
+  <div class="section-head">
+    <p class="eyebrow">Release history</p>
+    <h2>Every documented version.</h2>
+  </div>
+  <ol class="release-list">
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.7.0">
+        <span class="release-list-version">v0.7.0</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.6.3">
+        <span class="release-list-version">v0.6.3</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.6.2">
+        <span class="release-list-version">v0.6.2</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.6.1">
+        <span class="release-list-version">v0.6.1</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.6.0">
+        <span class="release-list-version">v0.6.0</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.5.0">
+        <span class="release-list-version">v0.5.0</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.4.1">
+        <span class="release-list-version">v0.4.1</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.4.0">
+        <span class="release-list-version">v0.4.0</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.3.1">
+        <span class="release-list-version">v0.3.1</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.3.0">
+        <span class="release-list-version">v0.3.0</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.2.8">
+        <span class="release-list-version">v0.2.8</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.2.7">
+        <span class="release-list-version">v0.2.7</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.2.6">
+        <span class="release-list-version">v0.2.6</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.2.5">
+        <span class="release-list-version">v0.2.5</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.2.4">
+        <span class="release-list-version">v0.2.4</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.2.3">
+        <span class="release-list-version">v0.2.3</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.2.2">
+        <span class="release-list-version">v0.2.2</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.2.1">
+        <span class="release-list-version">v0.2.1</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.2.0">
+        <span class="release-list-version">v0.2.0</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/tag/v0.1.0">
+        <span class="release-list-version">v0.1.0</span>
+        <span class="release-list-date">2026-09-07</span>
+        <span class="release-list-arrow" aria-hidden="true">↗</span>
+      </a>
+    </li>
+  </ol>
+  <p class="shot-disclaimer">Dates and versions are read from <code>docs/CHANGELOG.md</code> at build time. The site build uses the package version (0.8.0) and never invents release numbers.</p>
+</section>
+
+<section class="section wrap" id="links">
+  <div class="section-head">
+    <p class="eyebrow">Elsewhere</p>
+    <h2>Project links.</h2>
+  </div>
+  <div class="link-grid">
+    <a class="link-card" href="https://github.com/FiredMosquito831/my-provider-dash-manager"><span class="link-kicker">SOURCE</span><strong>GitHub repository</strong><span>Issues, releases, source and licence.</span><span class="card-link">Open GitHub <span aria-hidden="true">↗</span></span></a>
+    <a class="link-card" href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest"><span class="link-kicker">DOWNLOAD</span><strong>Latest release</strong><span>The Windows installer and release notes for v0.8.0.</span><span class="card-link">Open Releases <span aria-hidden="true">↗</span></span></a>
+    <a class="link-card" href="https://www.npmjs.com/package/my-provider-dash-manager"><span class="link-kicker">PACKAGE</span><strong>npm</strong><span><code>my-provider-dash-manager</code> and the <code>mpdm</code> alias.</span><span class="card-link">Open npm <span aria-hidden="true">↗</span></span></a>
+    <a class="link-card" href="https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/docs/CHANGELOG.md"><span class="link-kicker">NOTES</span><strong>Full changelog</strong><span>Every release note in one Markdown file.</span><span class="card-link">Read changelog <span aria-hidden="true">↗</span></span></a>
+    <a class="link-card" href="https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/DESIGN.md"><span class="link-kicker">DESIGN</span><strong>Architecture notes</strong><span>Partitions, security invariants, memory measurements and decisions.</span><span class="card-link">Read DESIGN.md <span aria-hidden="true">↗</span></span></a>
+    <a class="link-card" href="https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/LICENSE"><span class="link-kicker">LICENCE</span><strong>Source-available licence</strong><span>Free personal and commercial use; no modified redistribution.</span><span class="card-link">Read licence <span aria-hidden="true">↗</span></span></a>
+  </div>
+</section>
+
+<section class="cta wrap">
+  <div class="cta-inner">
+    <p class="eyebrow">Current release</p>
+    <h2>v0.8.0 is ready.</h2>
+    <p>Install or update in one command, or take the installer from GitHub Releases.</p>
+    <div class="command command-center" data-command>
+      <span class="command-prompt" aria-hidden="true">$</span>
+      <code>npx my-provider-dash-manager</code>
+      <button class="copy-button" type="button" data-copy="npx my-provider-dash-manager" aria-label="Copy install command">Copy</button>
+      <span class="copy-status" role="status" aria-live="polite"></span>
+    </div>
+    <div class="hero-actions hero-actions-center">
+      <a class="btn btn-primary" href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download v0.8.0</a>
+      <a class="btn btn-secondary" href="install.html">Install guide</a>
+    </div>
+  </div>
+</section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a class="brand brand-footer" href="index.html" aria-label="My Provider Dash Manager — home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="26" height="26" role="img" focusable="false">
+              <rect x="2" y="3" width="28" height="26" rx="5" fill="#0f1722" stroke="#31445c"/>
+              <path d="M2 10h28" stroke="#31445c"/>
+              <rect x="7" y="14" width="5" height="5" rx="1.4" fill="#68a6ff"/>
+              <rect x="14" y="14.5" width="10" height="2" rx="1" fill="#43536a"/>
+              <rect x="7" y="22" width="5" height="3" rx="1.2" fill="#4bd6a3"/>
+              <rect x="14" y="22.5" width="8" height="2" rx="1" fill="#43536a"/>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <span class="brand-name">My Provider Dash Manager</span>
+            <span class="brand-sub">WINDOWS · LOCAL-FIRST</span>
+          </span>
+        </a>
+        <p>One desktop app for every account you own. Real dashboards, real sessions, each identity in its own isolated Chromium partition.</p>
+      </div>
+
+      <div class="footer-links">
+        <div>
+          <h2 class="footer-heading">Product</h2>
+          <a href="index.html">Home</a>
+          <a href="features.html">Features</a>
+          <a href="install.html">Install &amp; requirements</a>
+          <a href="security.html">Security &amp; privacy</a>
+        </div>
+        <div>
+          <h2 class="footer-heading">Resources</h2>
+          <a href="faq.html">FAQ</a>
+          <a href="changelog.html">Changelog</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download v0.8.0</a>
+          <a href="https://www.npmjs.com/package/my-provider-dash-manager">npm package</a>
+        </div>
+        <div>
+          <h2 class="footer-heading">Project</h2>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager">Source on GitHub</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager#readme">README</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/docs/CHANGELOG.md">Raw changelog</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/LICENSE">Licence</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>© 2026 FiredMosquito831. Source-available; free for personal and commercial use.</p>
+      <p>Not affiliated with any service listed. Windows is a trademark of Microsoft Corporation.</p>
+    </div>
+  </footer>
+
+  <script src="assets/site.js" defer></script>
+</body>
+</html>

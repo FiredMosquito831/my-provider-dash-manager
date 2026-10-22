@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero wrap">
+  <div class="hero-copy">
+    <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> Windows desktop app <span class="sep">·</span> v{{ version }}</p>
+    <h1>Every account.<br><span class="grad">One window.</span></h1>
+    <p class="lede">Keep Google, Microsoft, AWS, Vercel, Netlify, Supabase, Cloudflare, GitHub, npm, Stripe, Gmail, Outlook and Proton Mail accounts signed in at the same time — each in its own isolated Chromium session. {{ service_count }} services built in. Any other site by URL.</p>
+
+    <div class="command" data-command>
+      <span class="command-prompt" aria-hidden="true">$</span>
+      <code>npx my-provider-dash-manager</code>
+      <button class="copy-button" type="button" data-copy="npx my-provider-dash-manager" aria-label="Copy install command">Copy</button>
+      <span class="copy-status" role="status" aria-live="polite"></span>
+    </div>
+
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="{{ latest_release_url }}">Download for Windows</a>
+      <a class="btn btn-secondary" href="install.html">Install guide <span aria-hidden="true">→</span></a>
+    </div>
+
+    <ul class="hero-facts" aria-label="At a glance">
+      <li>Windows 10 / 11</li>
+      <li>No account or telemetry</li>
+      <li>Free for personal &amp; commercial use</li>
+    </ul>
+  </div>
+
+  <div class="hero-visual">
+    <div class="app-window app-window-hero">
+      <div class="app-window-bar">
+        <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="app-window-title">Home — {{ product }}</span>
+        <span class="app-window-meta">v{{ version }}</span>
+      </div>
+      <div class="app-window-screen">
+        <img src="screenshots/home.png" width="1384" height="835" alt="My Provider Dash Manager Home screen: the account rail on the left and one card per account, colour-coded by service" fetchpriority="high">
+      </div>
+    </div>
+    <p class="shot-note">A real screenshot from a demo profile. Names and accounts are examples.</p>
+  </div>
+</section>
+
+<section class="stat-band wrap" aria-label="Product at a glance">
+  <dl>
+    <div><dt>{{ service_count }}</dt><dd>built-in services</dd></div>
+    <div><dt>1</dt><dd>window for every identity</dd></div>
+    <div><dt>0</dt><dd>telemetry events</dd></div>
+    <div><dt>v{{ version }}</dt><dd>current release</dd></div>
+  </dl>
+</section>
+
+<section class="section wrap" id="why">
+  <div class="section-head">
+    <p class="eyebrow">The problem</p>
+    <h2>Every provider assumes you have one identity.</h2>
+    <p>Freelancers, agencies and developers carry a personal account, a client account, a work account — often on the same service. The browser was never built for that.</p>
+  </div>
+
+  <div class="compare-grid">
+    <div class="panel pain-panel">
+      <div class="panel-bar"><span class="panel-label">WITHOUT ISOLATION</span><span class="window-dots small" aria-hidden="true"><i></i><i></i><i></i></span></div>
+      <ul class="check-list check-list-bad">
+        <li><span class="mark" aria-hidden="true">×</span><span>Signing out of one account to reach another, then signing back in again.</span></li>
+        <li><span class="mark" aria-hidden="true">×</span><span>Juggling browser profiles, one window each, with no single place to see every account.</span></li>
+        <li><span class="mark" aria-hidden="true">×</span><span>Asking “which account am I actually in right now?” before changing anything.</span></li>
+        <li><span class="mark" aria-hidden="true">×</span><span>Losing your workspace on restart, or re-typing the fifth account's password.</span></li>
+        <li><span class="mark" aria-hidden="true">×</span><span>Ads, blinding white dashboards, and a different extension setup per profile.</span></li>
+      </ul>
+    </div>
+
+    <div class="panel solution-panel">
+      <div class="panel-bar"><span class="panel-label">WITH PROVIDER DASH</span><span class="window-dots small" aria-hidden="true"><i></i><i></i><i></i></span></div>
+      <ul class="check-list check-list-good">
+        <li><span class="mark" aria-hidden="true">✓</span><span>Every account stays signed in, in its own storage partition.</span></li>
+        <li><span class="mark" aria-hidden="true">✓</span><span>One window: providers in the left rail, open accounts as tabs on top.</span></li>
+        <li><span class="mark" aria-hidden="true">✓</span><span>Every tab and rail row is colour-coded and labelled by account.</span></li>
+        <li><span class="mark" aria-hidden="true">✓</span><span>The open-tab set is remembered and restored on the next launch.</span></li>
+        <li><span class="mark" aria-hidden="true">✓</span><span>Built-in ad-blocking and dark mode, plus saved logins bound to each account.</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="section-kicker">It is not a browser and not a scraper. It is a <strong>container for identities</strong>: real dashboards, real sessions, one place.</p>
+</section>
+
+<section class="section section-flush wrap" id="screenshots">
+  <div class="section-head split-head">
+    <div>
+      <p class="eyebrow">Inside the app</p>
+      <h2>Chrome for accounts, not pages.</h2>
+    </div>
+    <p>The rail holds your identities. The strip holds only what is open. Home brings every account back into view without signing anything out.</p>
+  </div>
+
+  <div class="shot-grid">
+    <figure class="shot-card shot-wide">
+      <div class="app-window-bar">
+        <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="app-window-title">Home — account rail and account cards</span>
+      </div>
+      <a class="shot-link" href="screenshots/home.png" aria-label="Open the full Home screenshot">
+        <img src="screenshots/home.png" width="1384" height="835" loading="lazy" alt="Home: providers and accounts nested in the left rail, each account shown as a colour-coded card with sign-in state">
+      </a>
+      <figcaption>Home. Accounts stay in the rail with their own colour and live sign-in state. The installed version sits bottom-left.</figcaption>
+    </figure>
+
+    <figure class="shot-card">
+      <div class="app-window-bar">
+        <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="app-window-title">Service picker, updates and saved logins</span>
+      </div>
+      <a class="shot-link" href="screenshots/services.png" aria-label="Open the full service picker screenshot">
+        <img src="screenshots/services.png" width="1384" height="835" loading="lazy" alt="The Add an account service picker grouped by category, plus the Updates panel and saved-login controls">
+      </a>
+      <figcaption>The Add account picker, Updates panel and saved-login controls. Captured at v0.6.2, when 27 services shipped; the current build has {{ service_count }}.</figcaption>
+    </figure>
+
+    <figure class="shot-card">
+      <div class="app-window-bar">
+        <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="app-window-title">An isolated account tab</span>
+      </div>
+      <a class="shot-link" href="screenshots/navigation.png" aria-label="Open the full account navigation screenshot">
+        <img src="screenshots/navigation.png" width="1384" height="835" loading="lazy" alt="A Gmail account open inside its own tab, with back, forward, reload, dashboard and address bar controls">
+      </a>
+      <figcaption>A Gmail session in its own tab, with back, forward, reload, back-to-dashboard and an editable address bar.</figcaption>
+    </figure>
+  </div>
+  <p class="shot-disclaimer">Screenshots use a demo profile with placeholder account names. The app's UI is shown as captured; the site does not mock up product screens.</p>
+</section>
+
+<section class="section wrap" id="services">
+  <div class="section-head split-head">
+    <div>
+      <p class="eyebrow">Built-in registry</p>
+      <h2>{{ service_count }} services ready. Any other site by URL.</h2>
+    </div>
+    <p>Grouped by category, each with its own colour, sign-in route and multi-account guidance. The rail and Home show only the services you actually use; everything else waits in the Add account picker.</p>
+  </div>
+
+  <div class="service-grid">
+    {% for group in service_groups %}
+    <article class="service-group">
+      <h3>{{ group.label }} <span>{{ group.services | length }}</span></h3>
+      <ul class="service-list">
+        {% for service in group.services %}
+        <li class="service-chip" style="--svc: {{ service.color }}">
+          <span class="svc-dot" aria-hidden="true"></span>{{ service.name }}
+        </li>
+        {% endfor %}
+      </ul>
+    </article>
+    {% endfor %}
+  </div>
+
+  <div class="inline-note">
+    <span class="inline-note-mark" aria-hidden="true">+</span>
+    <p><strong>Not on the list?</strong> Add service by URL gives any site its own rail row and fully isolated per-account sessions. A JSON plugin manifest can go further and define how to read its API for a status card.</p>
+    <a href="features.html#extensibility">How extensibility works <span aria-hidden="true">→</span></a>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="features-overview">
+  <div class="section-head">
+    <p class="eyebrow">What it handles</p>
+    <h2>The daily friction, removed.</h2>
+    <p>Not a dashboard skin over a browser. Each feature is built around the account as the unit of work.</p>
+  </div>
+
+  <div class="feature-grid">
+    <a class="feature-card" href="features.html#accounts">
+      <span class="feature-index">01</span>
+      <h3>Isolated sessions</h3>
+      <p>Separate cookies, localStorage, IndexedDB and cache per account. Sign in once; sessions survive restarts and never see each other.</p>
+      <span class="card-link">Accounts &amp; sessions <span aria-hidden="true">→</span></span>
+    </a>
+    <a class="feature-card" href="features.html#layout">
+      <span class="feature-index">02</span>
+      <h3>A rail built for identities</h3>
+      <p>Providers nest their accounts. Tabs exist only for what is open. Home is always one click — or <kbd>Esc</kbd> — away.</p>
+      <span class="card-link">Layout &amp; browsing <span aria-hidden="true">→</span></span>
+    </a>
+    <a class="feature-card" href="features.html#passwords">
+      <span class="feature-index">03</span>
+      <h3>Passwords per account</h3>
+      <p>Logins typed inside a tab are remembered for that account, refilled on the right origin, encrypted with Windows DPAPI, and importable from browsers.</p>
+      <span class="card-link">Password manager <span aria-hidden="true">→</span></span>
+    </a>
+    <a class="feature-card" href="features.html#status">
+      <span class="feature-index">04</span>
+      <h3>Status at a glance</h3>
+      <p>Optional read-only API tokens light up project counts, names and deploy state on Home cards. Tokens are validated before storage and never leave the main process.</p>
+      <span class="card-link">API status cards <span aria-hidden="true">→</span></span>
+    </a>
+    <a class="feature-card" href="features.html#updates">
+      <span class="feature-index">05</span>
+      <h3>Quiet updates</h3>
+      <p>New releases download in the background and install silently when you close the app. Prefer buttons? Turn auto-update off and step through it yourself.</p>
+      <span class="card-link">Updates <span aria-hidden="true">→</span></span>
+    </a>
+    <a class="feature-card" href="features.html#focus">
+      <span class="feature-index">06</span>
+      <h3>Less noise</h3>
+      <p>EasyList-powered ad-blocking and Dark Reader's engine, both inside each account's session. No extensions to install or keep in sync.</p>
+      <span class="card-link">Ad-block &amp; dark mode <span aria-hidden="true">→</span></span>
+    </a>
+  </div>
+</section>
+
+<section class="section wrap" id="security-summary">
+  <div class="security-banner panel">
+    <div class="security-copy">
+      <p class="eyebrow">Security posture, honestly</p>
+      <h2>Local-first. Encrypted at rest. Explicit about the limits.</h2>
+      <p>Cookies, tokens and saved passwords are encrypted with Windows DPAPI. Saved logins are bound to the account and the service's own origins. There is no server, no app account and no telemetry. DPAPI does not protect against malware running as you — no desktop app can — and the installer is not code-signed yet. The site says so on the security page instead of hiding it.</p>
+      <a class="btn btn-secondary" href="security.html">Read the security model <span aria-hidden="true">→</span></a>
+    </div>
+    <ul class="security-points">
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>DPAPI</strong> encryption for saved logins and API tokens</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>Origin-bound</strong> credential capture and fill</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>Sandboxed</strong> account views, context isolation, deny-by-default permissions</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span><strong>No sync</strong> and no telemetry — state stays on this machine</span></li>
+    </ul>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="install-strip">
+  <div class="install-panel">
+    <div>
+      <p class="eyebrow">Install</p>
+      <h2>Two routes. Same app.</h2>
+      <p>Use the command line if you already have Node.js 18+. Otherwise download the installer from GitHub Releases. Both install the same per-user Windows app.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="{{ latest_release_url }}">Download installer</a>
+        <a class="btn btn-secondary" href="install.html">Requirements &amp; CLI <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
+    <div class="install-code">
+      <div class="app-window-bar">
+        <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="app-window-title">PowerShell</span>
+      </div>
+      <pre><span class="cmd-muted"># install or update, then launch</span>
+<span class="cmd-prompt">$</span> npx my-provider-dash-manager
+
+<span class="cmd-muted"># installed globally? the alias works too</span>
+<span class="cmd-prompt">$</span> mpdm update</pre>
+      <div class="install-foot">
+        <span>Windows 10 / 11 · 64-bit</span>
+        <a href="install.html#requirements">See requirements <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section wrap" id="quickstart">
+  <div class="section-head">
+    <p class="eyebrow">From install to signed in</p>
+    <h2>Three steps, no setup wizard.</h2>
+  </div>
+  <ol class="steps">
+    <li>
+      <span class="step-number">01</span>
+      <h3>Add an account</h3>
+      <p>Click <strong>Add account</strong> at the bottom of the rail, choose a service, name the account, then log in or create one. The real sign-in page opens inside that account's own isolated session.</p>
+    </li>
+    <li>
+      <span class="step-number">02</span>
+      <h3>Sign in normally</h3>
+      <p>Google services sign in directly. On other sites, prefer email/password or GitHub over “Continue with Google”, which Google blocks in embedded browsers. The <strong>Browser</strong> button finishes stubborn flows in your system browser.</p>
+    </li>
+    <li>
+      <span class="step-number">03</span>
+      <h3>Switch and stay signed in</h3>
+      <p>Click a tab or a rail row. Everything stays warm and signed in. Optionally connect a read-only API token for a status card, or import passwords from your browser.</p>
+    </li>
+  </ol>
+</section>
+
+<section class="section section-flush wrap" id="faq-preview">
+  <div class="section-head split-head">
+    <div>
+      <p class="eyebrow">Straight answers</p>
+      <h2>Before you install.</h2>
+    </div>
+    <p>The full FAQ covers memory use, password import, SmartScreen, provider terms and what happens to your data.</p>
+  </div>
+  <div class="faq-list">
+    {% for item in faq[:4] %}
+    <details class="faq-item"{% if loop.first %} open{% endif %}>
+      <summary>{{ item.q }}</summary>
+      <div class="faq-answer"><p>{{ item.a }}</p></div>
+    </details>
+    {% endfor %}
+  </div>
+  <p class="section-kicker"><a href="faq.html">Read all {{ faq | length }} questions <span aria-hidden="true">→</span></a></p>
+</section>
+
+<section class="cta wrap">
+  <div class="cta-inner">
+    <p class="eyebrow">Stop signing out</p>
+    <h2>Start switching.</h2>
+    <p>One Windows app for every account you own. Free for personal and commercial use; source-available under the project licence.</p>
+    <div class="command command-center" data-command>
+      <span class="command-prompt" aria-hidden="true">$</span>
+      <code>npx my-provider-dash-manager</code>
+      <button class="copy-button" type="button" data-copy="npx my-provider-dash-manager" aria-label="Copy install command">Copy</button>
+      <span class="copy-status" role="status" aria-live="polite"></span>
+    </div>
+    <div class="hero-actions hero-actions-center">
+      <a class="btn btn-primary" href="{{ latest_release_url }}">Download for Windows</a>
+      <a class="btn btn-secondary" href="{{ repo_url }}">View source</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Features — My Provider Dash Manager</title>
+  <meta name="description" content="Isolated accounts and sessions, a DPAPI-encrypted password manager, API status cards, silent updates, ad-blocking, dark mode and service plugins.">
+  <meta name="keywords" content="multi-account manager, isolated browser sessions, Windows desktop app, account switcher, My Provider Dash Manager, password manager import, per-account proxy, ad-blocking, dark mode, silent updates, service plugins">
+  <meta name="author" content="FiredMosquito831">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="theme-color" content="#080b11">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="https://providers.danubelabs.net/features.html">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/xml" title="Sitemap" href="sitemap.xml">
+  <link rel="stylesheet" href="assets/site.css">
+  <noscript><style>
+    @media (max-width: 900px) {
+      .topbar-inner { flex-wrap: wrap; padding: 9px 0; }
+      .site-nav { display: flex; position: static; flex-direction: row; flex-wrap: wrap; width: 100%; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+      .nav-toggle { display: none; }
+    }
+  </style></noscript>
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="My Provider Dash Manager">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="Features — My Provider Dash Manager">
+  <meta property="og:description" content="Isolated accounts and sessions, a DPAPI-encrypted password manager, API status cards, silent updates, ad-blocking, dark mode and service plugins.">
+  <meta property="og:url" content="https://providers.danubelabs.net/features.html">
+  <meta property="og:image" content="https://providers.danubelabs.net/og.png">
+  <meta property="og:image:secure_url" content="https://providers.danubelabs.net/og.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="My Provider Dash Manager — the account rail and Home screen, presented as a desktop window">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Features — My Provider Dash Manager">
+  <meta name="twitter:description" content="Isolated accounts and sessions, a DPAPI-encrypted password manager, API status cards, silent updates, ad-blocking, dark mode and service plugins.">
+  <meta name="twitter:image" content="https://providers.danubelabs.net/og.png">
+  <meta name="twitter:image:alt" content="My Provider Dash Manager — every account in one window">
+
+  <script type="application/ld+json">[{"@context":"https://schema.org","@type":"SoftwareApplication","name":"My Provider Dash Manager","alternateName":"mpdm","url":"https://providers.danubelabs.net/","description":"A free Windows desktop app that keeps many accounts per cloud and web service signed in at the same time, each in its own fully isolated Chromium session, switchable like browser tabs but built around accounts instead of pages.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Multi-account manager","operatingSystem":"Windows 10, Windows 11","softwareVersion":"0.8.0","downloadUrl":"https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest","installUrl":"https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest","codeRepository":"https://github.com/FiredMosquito831/my-provider-dash-manager","isAccessibleForFree":true,"license":"https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/LICENSE","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["Fully isolated persistent Chromium session per account","37 services built in, plus any site by URL","One window with a left account rail and per-account tabs on top","Built-in ad-blocking driven by EasyList","Dark mode powered by Dark Reader","Saved logins encrypted with Windows DPAPI and origin-bound","Import passwords from Chrome, Edge, Brave, Vivaldi, Opera or CSV","Choose which login autofills per account","Optional read-only API tokens for live status cards","Per-account proxy support","Silent in-place auto-updates from GitHub Releases"],"screenshot":[{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/home.png","caption":"Home with the account rail and one card per account"},{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/services.png","caption":"The service picker grouped by category, the Updates panel and saved logins"},{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/navigation.png","caption":"An account tab open with back, forward, reload, dashboard and the address bar"}]},{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://providers.danubelabs.net/"},{"@type":"ListItem","position":2,"name":"Features","item":"https://providers.danubelabs.net/features.html"}]}]</script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar" data-topbar>
+    <div class="topbar-inner">
+      <a class="brand" href="index.html" aria-label="My Provider Dash Manager — home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28" role="img" focusable="false">
+            <rect x="2" y="3" width="28" height="26" rx="5" fill="#0f1722" stroke="#31445c"/>
+            <path d="M2 10h28" stroke="#31445c"/>
+            <rect x="7" y="14" width="5" height="5" rx="1.4" fill="#68a6ff"/>
+            <rect x="14" y="14.5" width="10" height="2" rx="1" fill="#43536a"/>
+            <rect x="7" y="22" width="5" height="3" rx="1.2" fill="#4bd6a3"/>
+            <rect x="14" y="22.5" width="8" height="2" rx="1" fill="#43536a"/>
+            <circle cx="25" cy="6.5" r="1.2" fill="#ff6b6b"/>
+            <circle cx="21.5" cy="6.5" r="1.2" fill="#f2c14e"/>
+            <circle cx="18" cy="6.5" r="1.2" fill="#4bd6a3"/>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <span class="brand-name">Provider Dash</span>
+          <span class="brand-sub">MANAGER · MPDM</span>
+        </span>
+      </a>
+
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-nav-toggle>
+        <span class="nav-toggle-lines" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="sr-only">Toggle navigation</span>
+      </button>
+
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="index.html">Home</a>
+        <a href="features.html" class="is-current" aria-current="page">Features</a>
+        <a href="install.html">Install</a>
+        <a href="security.html">Security</a>
+        <a href="faq.html">FAQ</a>
+        <a href="changelog.html">Changelog</a>
+      </nav>
+
+      <a class="btn btn-small btn-primary topbar-download" href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download <span class="btn-version">v0.8.0</span></a>
+    </div>
+  </header>
+
+  <main id="main">
+<section class="page-hero wrap">
+  <div>
+    <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> Features · v0.8.0</p>
+    <h1>Built around identities,<br><span class="grad">not tabs.</span></h1>
+    <p class="lede">My Provider Dash Manager keeps every account signed in inside its own Chromium session, then gives you one deliberate place to switch, secure and keep track of them. Here is exactly what that includes.</p>
+    <ul class="hero-facts">
+      <li>37 services built in</li>
+      <li>Any site by URL</li>
+      <li>Windows 10 / 11</li>
+    </ul>
+  </div>
+  <aside class="toc" aria-label="On this page">
+    <p class="toc-title">On this page</p>
+    <a href="#accounts">Accounts &amp; sessions</a>
+    <a href="#layout">Layout &amp; browsing</a>
+    <a href="#builtins">Built-in services</a>
+    <a href="#passwords">Password manager</a>
+    <a href="#status">API status</a>
+    <a href="#updates">Updates</a>
+    <a href="#focus">Ad-block &amp; dark mode</a>
+    <a href="#extensibility">Extensibility</a>
+    <a href="#policies">Provider terms</a>
+  </aside>
+</section>
+
+<section class="section wrap feature-section" id="accounts">
+  <div class="feature-intro">
+    <p class="eyebrow">01 · Accounts &amp; sessions</p>
+    <h2>Each identity gets its own world.</h2>
+    <p>Every account is a <code>persist:&lt;service&gt;__&lt;account&gt;</code> Chromium partition: separate cookies, localStorage, IndexedDB and cache. Accounts can never see each other's session.</p>
+  </div>
+  <div class="detail-grid">
+    <article class="detail-card"><h3>Any number of accounts</h3><p>Add as many accounts per service as you need. Switching is just activating another live view; nothing is signed out to reach the other.</p></article>
+    <article class="detail-card"><h3>Sessions survive restarts</h3><p>Sign in once and stay signed in. The open-tab set is saved and restored; recent tabs come back warm, the rest asleep, and you land on Home.</p></article>
+    <article class="detail-card"><h3>Warm tabs, bounded memory</h3><p>Each live dashboard costs roughly 125 MB of private memory, so the app keeps a configurable number warm (default 5) and sleeps the rest. Slept tabs stay in the strip and resume on click.</p></article>
+    <article class="detail-card"><h3>Optional per-account proxy</h3><p>Route one account through a proxy when a client or region requires it, with proper connection flushing when the setting changes.</p></article>
+  </div>
+  <div class="measure-band">
+    <p class="measure-title">Measured, not guessed</p>
+    <div class="measure-row"><span>5 live tabs</span><strong>≈ 1.0 GB</strong></div>
+    <div class="measure-row"><span>10 live tabs</span><strong>≈ 1.6 GB</strong></div>
+    <div class="measure-row"><span>All tabs asleep</span><strong>≈ 0.35 GB</strong></div>
+    <p class="measure-note">Private memory, the figure Task Manager reports. Roughly 125 MB for each live dashboard on a ~350 MB baseline.</p>
+  </div>
+</section>
+
+<section class="section section-flush wrap feature-section" id="layout">
+  <div class="feature-intro">
+    <p class="eyebrow">02 · Layout &amp; browsing</p>
+    <h2>The chrome never gets in the way.</h2>
+    <p>The left rail holds providers and their accounts. The top strip holds only open tabs. Account pages are rendered beneath that chrome, so Home and switching controls are always reachable.</p>
+  </div>
+  <div class="split-detail">
+    <div>
+      <ul class="check-list check-list-good">
+        <li><span class="mark" aria-hidden="true">✓</span><span><strong>Left rail — your identities.</strong> Providers you use, accounts nested underneath, with hover actions to open, sleep, close, fill login, connect a token or manage. Collapse any provider.</span></li>
+        <li><span class="mark" aria-hidden="true">✓</span><span><strong>Top bar — open tabs only.</strong> A filter box and group-by-provider mode with collapsible groups. Slept tabs stay in the strip, dimmed.</span></li>
+        <li><span class="mark" aria-hidden="true">✓</span><span><strong>Home is always close.</strong> Every account as a card with live status, the service picker, the Updates panel and saved-login settings.</span></li>
+        <li><span class="mark" aria-hidden="true">✓</span><span><strong>Browser controls.</strong> Back, forward, reload/stop, back-to-dashboard and an editable address bar. Navigation stays inside that account's session and accepts http/https only.</span></li>
+      </ul>
+    </div>
+    <div class="shortcut-panel">
+      <p class="panel-label">KEYBOARD</p>
+      <dl class="shortcuts">
+        <div><dt><kbd>Ctrl</kbd> <kbd>W</kbd></dt><dd>Sleep tab</dd></div>
+        <div><dt><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>W</kbd></dt><dd>Sleep all</dd></div>
+        <div><dt><kbd>Ctrl</kbd> <kbd>Tab</kbd></dt><dd>Cycle tabs</dd></div>
+        <div><dt><kbd>Ctrl</kbd> <kbd>1…9</kbd></dt><dd>Jump to tab</dd></div>
+        <div><dt><kbd>Esc</kbd></dt><dd>Home</dd></div>
+        <div><dt><kbd>Alt</kbd> <kbd>←</kbd> / <kbd>→</kbd></dt><dd>Back / forward</dd></div>
+        <div><dt><kbd>Ctrl</kbd> <kbd>R</kbd> or <kbd>F5</kbd></dt><dd>Reload</dd></div>
+        <div><dt><kbd>Ctrl</kbd> <kbd>L</kbd></dt><dd>Address bar</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<section class="section wrap feature-section" id="builtins">
+  <div class="feature-intro">
+    <p class="eyebrow">03 · Built-in services</p>
+    <h2>37 services, grouped by the work.</h2>
+    <p>Each entry has its own dashboard and sign-in URLs, colour, multi-account policy and optional API token type. Login pages are verified to load inside an isolated partition and land on a host the credential guard trusts.</p>
+  </div>
+  <div class="service-grid service-grid-compact">
+    <article class="service-group">
+      <h3>Hosting &amp; deploy <span>8</span></h3>
+      <ul class="service-list">
+        <li class="service-chip" style="--svc: #000000"><span class="svc-dot" aria-hidden="true"></span>Vercel</li>
+        <li class="service-chip" style="--svc: #00c7b7"><span class="svc-dot" aria-hidden="true"></span>Netlify</li>
+        <li class="service-chip" style="--svc: #f6821f"><span class="svc-dot" aria-hidden="true"></span>Cloudflare</li>
+        <li class="service-chip" style="--svc: #a77dfb"><span class="svc-dot" aria-hidden="true"></span>Railway</li>
+        <li class="service-chip" style="--svc: #46e3b7"><span class="svc-dot" aria-hidden="true"></span>Render</li>
+        <li class="service-chip" style="--svc: #7b3fe4"><span class="svc-dot" aria-hidden="true"></span>Fly.io</li>
+        <li class="service-chip" style="--svc: #430098"><span class="svc-dot" aria-hidden="true"></span>Heroku</li>
+        <li class="service-chip" style="--svc: #0080ff"><span class="svc-dot" aria-hidden="true"></span>DigitalOcean</li>
+      </ul>
+    </article>
+    <article class="service-group">
+      <h3>Databases <span>2</span></h3>
+      <ul class="service-list">
+        <li class="service-chip" style="--svc: #3ecf8e"><span class="svc-dot" aria-hidden="true"></span>Supabase</li>
+        <li class="service-chip" style="--svc: #00e599"><span class="svc-dot" aria-hidden="true"></span>Neon</li>
+      </ul>
+    </article>
+    <article class="service-group">
+      <h3>Code &amp; packages <span>6</span></h3>
+      <ul class="service-list">
+        <li class="service-chip" style="--svc: #238636"><span class="svc-dot" aria-hidden="true"></span>GitHub</li>
+        <li class="service-chip" style="--svc: #fc6d26"><span class="svc-dot" aria-hidden="true"></span>GitLab</li>
+        <li class="service-chip" style="--svc: #cb3837"><span class="svc-dot" aria-hidden="true"></span>npm</li>
+        <li class="service-chip" style="--svc: #3775a9"><span class="svc-dot" aria-hidden="true"></span>PyPI</li>
+        <li class="service-chip" style="--svc: #2496ed"><span class="svc-dot" aria-hidden="true"></span>Docker Hub</li>
+        <li class="service-chip" style="--svc: #ffd21e"><span class="svc-dot" aria-hidden="true"></span>Hugging Face</li>
+      </ul>
+    </article>
+    <article class="service-group">
+      <h3>Payments <span>1</span></h3>
+      <ul class="service-list">
+        <li class="service-chip" style="--svc: #635bff"><span class="svc-dot" aria-hidden="true"></span>Stripe</li>
+      </ul>
+    </article>
+    <article class="service-group">
+      <h3>Google <span>7</span></h3>
+      <ul class="service-list">
+        <li class="service-chip" style="--svc: #4285f4"><span class="svc-dot" aria-hidden="true"></span>Google Account</li>
+        <li class="service-chip" style="--svc: #ea4335"><span class="svc-dot" aria-hidden="true"></span>Gmail</li>
+        <li class="service-chip" style="--svc: #34a853"><span class="svc-dot" aria-hidden="true"></span>Google Cloud</li>
+        <li class="service-chip" style="--svc: #ffca28"><span class="svc-dot" aria-hidden="true"></span>Firebase</li>
+        <li class="service-chip" style="--svc: #fbbc04"><span class="svc-dot" aria-hidden="true"></span>Google Workspace Admin</li>
+        <li class="service-chip" style="--svc: #01875f"><span class="svc-dot" aria-hidden="true"></span>Google Play Console</li>
+        <li class="service-chip" style="--svc: #8e44ad"><span class="svc-dot" aria-hidden="true"></span>Google AI Studio</li>
+      </ul>
+    </article>
+    <article class="service-group">
+      <h3>Microsoft <span>4</span></h3>
+      <ul class="service-list">
+        <li class="service-chip" style="--svc: #0078d4"><span class="svc-dot" aria-hidden="true"></span>Microsoft Account</li>
+        <li class="service-chip" style="--svc: #0f6cbd"><span class="svc-dot" aria-hidden="true"></span>Outlook</li>
+        <li class="service-chip" style="--svc: #0089d6"><span class="svc-dot" aria-hidden="true"></span>Azure</li>
+        <li class="service-chip" style="--svc: #d83b01"><span class="svc-dot" aria-hidden="true"></span>Microsoft 365 Admin</li>
+      </ul>
+    </article>
+    <article class="service-group">
+      <h3>Mail <span>6</span></h3>
+      <ul class="service-list">
+        <li class="service-chip" style="--svc: #6d4aff"><span class="svc-dot" aria-hidden="true"></span>Proton Mail</li>
+        <li class="service-chip" style="--svc: #e42527"><span class="svc-dot" aria-hidden="true"></span>Zoho Mail</li>
+        <li class="service-chip" style="--svc: #0067b9"><span class="svc-dot" aria-hidden="true"></span>Fastmail</li>
+        <li class="service-chip" style="--svc: #6001d2"><span class="svc-dot" aria-hidden="true"></span>Yahoo Mail</li>
+        <li class="service-chip" style="--svc: #a01e20"><span class="svc-dot" aria-hidden="true"></span>Tuta Mail</li>
+        <li class="service-chip" style="--svc: #3693f3"><span class="svc-dot" aria-hidden="true"></span>iCloud Mail</li>
+      </ul>
+    </article>
+    <article class="service-group">
+      <h3>Cloud <span>1</span></h3>
+      <ul class="service-list">
+        <li class="service-chip" style="--svc: #ff9900"><span class="svc-dot" aria-hidden="true"></span>AWS</li>
+      </ul>
+    </article>
+    <article class="service-group">
+      <h3>AI <span>2</span></h3>
+      <ul class="service-list">
+        <li class="service-chip" style="--svc: #10a37f"><span class="svc-dot" aria-hidden="true"></span>OpenAI Platform</li>
+        <li class="service-chip" style="--svc: #d97757"><span class="svc-dot" aria-hidden="true"></span>Claude Platform (Anthropic)</li>
+      </ul>
+    </article>
+  </div>
+  <div class="callout">
+    <p><strong>Google sign-in works inside the app.</strong> Third-party “Continue with Google” flows are different: Google blocks those in embedded browsers. The app's <strong>Browser</strong> button hands a stubborn flow to your system browser, and the rest of the app keeps working.</p>
+  </div>
+</section>
+
+<section class="section section-flush wrap feature-section" id="passwords">
+  <div class="feature-intro">
+    <p class="eyebrow">04 · Password manager</p>
+    <h2>Two accounts. Two passwords. No guessing.</h2>
+    <p>Saved logins belong to the account that typed them, not just the site. That is the difference between a password manager and a password manager that understands identities.</p>
+  </div>
+  <div class="detail-grid">
+    <article class="detail-card"><h3>Capture inside the account</h3><p>Logins typed inside an account tab are remembered for that account. Two accounts on the same service refill with different credentials.</p></article>
+    <article class="detail-card"><h3>Autofill or manual fill</h3><p>Sign-in pages are recognised and filled when autofill is on; a manual fill action is always available from the account's rail actions.</p></article>
+    <article class="detail-card"><h3>Manage every login</h3><p>Home → Saved logins → Manage logins groups every stored login by service, with delete. No password is ever shown.</p></article>
+    <article class="detail-card"><h3>Choose the default</h3><p>When more than one login matches a site, the app asks instead of guessing. Your choice is remembered as that account's default, marked ★ in the manager.</p></article>
+    <article class="detail-card"><h3>Import from browsers or CSV</h3><p>Read installed Chromium browsers directly (Chrome, Edge, Brave, Vivaldi, Opera) or import a CSV from any browser, including Firefox. Re-importing updates changed passwords instead of keeping the stale one.</p></article>
+    <article class="detail-card"><h3>Encrypted and origin-bound</h3><p>Encrypted at rest with Windows DPAPI. Passwords never reach the app's own UI process. A login is tied to the account and the service's own domains, so a password typed on a look-alike page is not captured and a saved password is not filled outside those domains.</p></article>
+  </div>
+</section>
+
+<section class="section wrap feature-section" id="status">
+  <div class="feature-intro">
+    <p class="eyebrow">05 · API status</p>
+    <h2>A dashboard that knows what is behind the login.</h2>
+    <p>Paste a read-only API token into an account and its Home card shows live status. The token field tells you which credential each service expects.</p>
+  </div>
+  <div class="split-detail">
+    <ul class="check-list check-list-good">
+      <li><span class="mark" aria-hidden="true">✓</span><span>Project, app, repository or package counts and names for every built-in developer service except PyPI, whose tokens are upload-only.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span>Latest deploy state on Vercel; account name plus charges and payouts state on Stripe.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span>Tokens are validated before being stored, encrypted with DPAPI, revocable in one click, and never leave the main process.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span>Read-only endpoints only. The app never mutates anything through a service API.</span></li>
+    </ul>
+    <div class="status-panel panel" aria-label="Fields a status card can show">
+      <div class="panel-bar"><span class="panel-label">STATUS CARD FIELDS</span><span class="window-dots small" aria-hidden="true"><i></i><i></i><i></i></span></div>
+      <div class="status-fields">
+        <div class="status-field">Project, site, app, repository or package count <code>count + names</code></div>
+        <div class="status-field">Latest deployment state <code>Vercel</code></div>
+        <div class="status-field">Stripe account state <code>charges / payouts</code></div>
+        <div class="status-field">Token scope <code>read-only</code></div>
+      </div>
+      <p class="status-caption">These are the fields the app already reads through service APIs. No account data or token is shown on this site.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section section-flush wrap feature-section" id="updates">
+  <div class="feature-intro">
+    <p class="eyebrow">06 · Updates</p>
+    <h2>Updates that get out of the way.</h2>
+    <p>The app checks on startup and hourly against the public release feed. A newer release downloads in the background and installs silently, with no wizard, the next time you close it.</p>
+  </div>
+  <div class="timeline">
+    <div class="timeline-step"><span class="timeline-dot"></span><h3>Found</h3><p>The rail badge and Updates panel show the newest release and its notes.</p></div>
+    <div class="timeline-step"><span class="timeline-dot"></span><h3>Downloaded</h3><p>The rail badge becomes <strong>Restart to update x.y.z</strong>. Press it to relaunch on the new version, or just close the app.</p></div>
+    <div class="timeline-step"><span class="timeline-dot"></span><h3>Installed</h3><p>The update installs in place, without a wizard. Accounts, sessions and saved logins live outside the install and survive.</p></div>
+  </div>
+  <div class="callout">
+    <p><strong>Prefer manual control?</strong> Turn <strong>Auto-update</strong> off in the Updates panel. Check, Download and Restart &amp; update become explicit steps with release notes and progress. The interactive installer is only used for first installs.</p>
+  </div>
+</section>
+
+<section class="section wrap feature-section" id="focus">
+  <div class="feature-intro">
+    <p class="eyebrow">07 · Ad-block &amp; dark mode</p>
+    <h2>Quieter pages, darker nights.</h2>
+    <p>Both run inside each account's own session, so you do not install or maintain a single extension. Both are built around what Electron can actually support.</p>
+  </div>
+  <div class="compare-grid">
+    <article class="panel focus-panel">
+      <div class="panel-bar"><span class="panel-label">AD-BLOCKING</span><span class="window-dots small" aria-hidden="true"><i></i><i></i><i></i></span></div>
+      <p>Driven by EasyList: roughly 52,000 blocked hosts plus generic cosmetic rules, refreshed weekly, applied per account partition.</p>
+      <ul class="mini-list">
+        <li>Main-frame navigation and sign-in infrastructure are never blocked.</li>
+        <li>Generic rules are skipped on the dashboards the app manages.</li>
+        <li>uBlock Origin cannot run inside Electron, so this built-in blocker fills that role.</li>
+      </ul>
+    </article>
+    <article class="panel focus-panel">
+      <div class="panel-bar"><span class="panel-label">DARK MODE</span><span class="window-dots small" aria-hidden="true"><i></i><i></i><i></i></span></div>
+      <p>Powered by Dark Reader's own engine, driven directly rather than installed as an extension. One toggle on Home applies to every account tab.</p>
+      <ul class="mini-list">
+        <li>Instant — pages do not reload, so scroll position and half-typed forms survive.</li>
+        <li>Runs inside each tab's isolated world at roughly 2 MB per open account.</li>
+        <li>Works where Electron's extension APIs would not support the browser extension.</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="section section-flush wrap feature-section" id="extensibility">
+  <div class="feature-intro">
+    <p class="eyebrow">08 · Extensibility</p>
+    <h2>If it has a login, it can have a rail row.</h2>
+  </div>
+  <div class="detail-grid">
+    <article class="detail-card"><h3>Add any service by URL</h3><p>Any site gets its own rail row and fully isolated per-account sessions, exactly like a built-in service.</p></article>
+    <article class="detail-card"><h3>Service plugins</h3><p>Drop a small JSON manifest into <code>plugins/</code> — or install it from the UI — to define a service and, optionally, how to read its API for status cards.</p></article>
+    <article class="detail-card"><h3>Guided, never automated</h3><p>Account creation is always manual and guided inside the account's session. Nothing signs up on your behalf, because automated signup violates several providers' acceptable-use policies.</p></article>
+  </div>
+</section>
+
+<section class="section wrap feature-section" id="policies">
+  <div class="feature-intro">
+    <p class="eyebrow">09 · Provider terms</p>
+    <h2>The app surfaces the rules instead of hiding them.</h2>
+    <p>Multiple accounts are a technical capability, not a licence to ignore a provider's terms. The rail states the stance for each service.</p>
+  </div>
+  <div class="table-wrap">
+    <table class="policy-table">
+      <thead><tr><th>Provider stance</th><th>What the app shows</th></tr></thead>
+      <tbody>
+        <tr><td><strong>One account per person</strong></td><td>GitHub and Railway: the rail says so. Use their organisations and workspaces instead.</td></tr>
+        <tr><td><strong>Separate accounts tolerated, watch for abuse</strong></td><td>Vercel, Netlify, Supabase, Cloudflare, Heroku and DigitalOcean.</td></tr>
+        <tr><td><strong>Extra accounts treated as ordinary</strong></td><td>The registries, GitLab, Fly.io, Neon, Google, Microsoft and the mail providers.</td></tr>
+        <tr><td><strong>One account per business</strong></td><td>Stripe expects one per business. The app does not change that.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="cta wrap">
+  <div class="cta-inner">
+    <p class="eyebrow">Ready when you are</p>
+    <h2>Every account. One window.</h2>
+    <p>37 services built in, any other site by URL, and sessions that stay signed in.</p>
+    <div class="hero-actions hero-actions-center">
+      <a class="btn btn-primary" href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download v0.8.0</a>
+      <a class="btn btn-secondary" href="install.html">Install guide</a>
+    </div>
+  </div>
+</section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a class="brand brand-footer" href="index.html" aria-label="My Provider Dash Manager — home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="26" height="26" role="img" focusable="false">
+              <rect x="2" y="3" width="28" height="26" rx="5" fill="#0f1722" stroke="#31445c"/>
+              <path d="M2 10h28" stroke="#31445c"/>
+              <rect x="7" y="14" width="5" height="5" rx="1.4" fill="#68a6ff"/>
+              <rect x="14" y="14.5" width="10" height="2" rx="1" fill="#43536a"/>
+              <rect x="7" y="22" width="5" height="3" rx="1.2" fill="#4bd6a3"/>
+              <rect x="14" y="22.5" width="8" height="2" rx="1" fill="#43536a"/>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <span class="brand-name">My Provider Dash Manager</span>
+            <span class="brand-sub">WINDOWS · LOCAL-FIRST</span>
+          </span>
+        </a>
+        <p>One desktop app for every account you own. Real dashboards, real sessions, each identity in its own isolated Chromium partition.</p>
+      </div>
+
+      <div class="footer-links">
+        <div>
+          <h2 class="footer-heading">Product</h2>
+          <a href="index.html">Home</a>
+          <a href="features.html">Features</a>
+          <a href="install.html">Install &amp; requirements</a>
+          <a href="security.html">Security &amp; privacy</a>
+        </div>
+        <div>
+          <h2 class="footer-heading">Resources</h2>
+          <a href="faq.html">FAQ</a>
+          <a href="changelog.html">Changelog</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download v0.8.0</a>
+          <a href="https://www.npmjs.com/package/my-provider-dash-manager">npm package</a>
+        </div>
+        <div>
+          <h2 class="footer-heading">Project</h2>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager">Source on GitHub</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager#readme">README</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/docs/CHANGELOG.md">Raw changelog</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/LICENSE">Licence</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>© 2026 FiredMosquito831. Source-available; free for personal and commercial use.</p>
+      <p>Not affiliated with any service listed. Windows is a trademark of Microsoft Corporation.</p>
+    </div>
+  </footer>
+
+  <script src="assets/site.js" defer></script>
+</body>
+</html>

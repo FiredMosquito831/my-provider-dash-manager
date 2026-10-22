@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-hero wrap">
+  <div>
+    <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> Install · Windows 10 / 11</p>
+    <h1>From zero to every account,<br><span class="grad">in one command.</span></h1>
+    <p class="lede">Install with <code>npx</code> if you already have Node.js 18+, or download the Windows installer straight from GitHub Releases. The installed app is a standalone executable; it does not need Node.js to run.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="{{ latest_release_url }}">Download v{{ version }}</a>
+      <a class="btn btn-secondary" href="#cli">CLI reference <span aria-hidden="true">→</span></a>
+    </div>
+  </div>
+  <aside class="requirements-card panel">
+    <div class="panel-bar"><span class="panel-label">REQUIREMENTS</span><span class="window-dots small" aria-hidden="true"><i></i><i></i><i></i></span></div>
+    <dl class="requirements">
+      <div><dt>Operating system</dt><dd>Windows 10 or 11, 64-bit</dd></div>
+      <div><dt>Memory</dt><dd>~350 MB with all tabs asleep; ~125 MB per live dashboard</dd></div>
+      <div><dt>Node.js</dt><dd>18+ for the <code>npx</code> route only</dd></div>
+      <div><dt>Account</dt><dd>None. No sign-up, no cloud account</dd></div>
+      <div><dt>Price</dt><dd>Free for personal and commercial use</dd></div>
+    </dl>
+  </aside>
+</section>
+
+<section class="section wrap" id="install">
+  <div class="section-head split-head">
+    <div>
+      <p class="eyebrow">Two install routes</p>
+      <h2>Pick one. They end in the same place.</h2>
+    </div>
+    <p>The command-line route downloads the newest installer from GitHub, verifies it is a real Windows executable, runs it, and launches the app.</p>
+  </div>
+
+  <div class="install-options">
+    <article class="install-option panel">
+      <div class="panel-bar"><span class="panel-label">OPTION A · RECOMMENDED</span><span class="option-tag">npx</span></div>
+      <div class="install-option-body">
+        <h3>From the command line</h3>
+        <p>Requires Node.js 18 or newer.</p>
+        <div class="command" data-command>
+          <span class="command-prompt" aria-hidden="true">$</span>
+          <code>npx my-provider-dash-manager</code>
+          <button class="copy-button" type="button" data-copy="npx my-provider-dash-manager" aria-label="Copy install command">Copy</button>
+          <span class="copy-status" role="status" aria-live="polite"></span>
+        </div>
+        <p class="option-note">Run the same command later to update. The package also installs the short alias <code>mpdm</code> when installed globally.</p>
+      </div>
+    </article>
+
+    <article class="install-option panel">
+      <div class="panel-bar"><span class="panel-label">OPTION B · DIRECT</span><span class="option-tag">.EXE</span></div>
+      <div class="install-option-body">
+        <h3>Download the installer</h3>
+        <p>No Node.js needed. Download <code>My-Provider-Dash-Manager-Setup-{{ version }}.exe</code> from the latest release and run it.</p>
+        <a class="btn btn-secondary" href="{{ latest_release_url }}">Open GitHub Releases <span aria-hidden="true">→</span></a>
+        <p class="option-note">The installer installs per user under <code>%LOCALAPPDATA%\Programs</code> and creates Start Menu and Desktop shortcuts.</p>
+      </div>
+    </article>
+  </div>
+
+  <div class="callout callout-warn">
+    <p><strong>SmartScreen will warn on the first run.</strong> The installer is not code-signed yet. Choose <strong>More info → Run anyway</strong>. Code signing is planned and removes the warning.</p>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="after-install">
+  <div class="section-head">
+    <p class="eyebrow">First run</p>
+    <h2>Three steps to a usable rail.</h2>
+  </div>
+  <ol class="steps">
+    <li><span class="step-number">01</span><h3>Add an account</h3><p>Click <strong>Add account</strong> at the bottom of the rail, choose a service from the searchable picker, name the account, then choose <strong>Log in</strong> or <strong>Create a new account</strong>.</p></li>
+    <li><span class="step-number">02</span><h3>Sign in inside the session</h3><p>The real sign-in page opens in that account's own isolated session. Google services sign in directly. Elsewhere, prefer email/password or GitHub over “Continue with Google”.</p></li>
+    <li><span class="step-number">03</span><h3>Repeat, then switch</h3><p>Add every identity you need. Click a rail row or a tab to switch. Everything stays signed in. Optionally connect read-only tokens or import saved passwords.</p></li>
+  </ol>
+</section>
+
+<section class="section wrap" id="updates">
+  <div class="feature-intro">
+    <p class="eyebrow">Keep it current</p>
+    <h2>Three routes to the same update.</h2>
+  </div>
+  <div class="detail-grid">
+    <article class="detail-card"><h3>Automatic, in the app</h3><p>Default. Checks on startup and hourly; downloads in the background; installs silently on close or on <strong>Restart &amp; update</strong>. The rail badge turns into <strong>Restart to update x.y.z</strong> when it is ready.</p></article>
+    <article class="detail-card"><h3>From the command line</h3><p><code>npx my-provider-dash-manager</code> — or <code>mpdm update</code> — updates an existing install silently and in place. Add <code>--interactive</code> for the wizard. Close the app first, or the running copy keeps the old version until restart.</p></article>
+    <article class="detail-card"><h3>From the release page</h3><p>Run the newest installer. It upgrades in place. Accounts, sessions, saved logins and settings live in <code>%APPDATA%\multi-acc-manager</code> and survive updates and reinstalls.</p></article>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="cli">
+  <div class="section-head split-head">
+    <div>
+      <p class="eyebrow">The CLI</p>
+      <h2>A small lifecycle tool, not a second app.</h2>
+    </div>
+    <p>Install globally with <code>npm i -g my-provider-dash-manager</code> to use the package name or the shorter <code>mpdm</code> alias anywhere.</p>
+  </div>
+  <div class="table-wrap">
+    <table class="cli-table">
+      <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>my-provider-dash-manager</code></td><td>Install or update to the newest release, then launch</td></tr>
+        <tr><td><code>… install</code> / <code>… update</code></td><td>Install or update only</td></tr>
+        <tr><td><code>… start</code></td><td>Launch the installed app</td></tr>
+        <tr><td><code>… status</code></td><td>Installed version vs latest, plus where the app and your data live</td></tr>
+        <tr><td><code>… where</code></td><td>Print the install and data paths</td></tr>
+        <tr><td><code>… uninstall</code></td><td>Run the uninstaller (accounts and sessions are kept)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <p><strong>Flags:</strong> <code>--silent</code> (no wizard on a first install), <code>--interactive</code> (wizard for an update), <code>--download-only</code>, <code>--force</code>, <code>--version</code>, <code>--help</code>. From a checkout of the repository, the equivalent is <code>npm run install:latest</code>.</p>
+  </div>
+</section>
+
+<section class="section wrap" id="requirements">
+  <div class="section-head">
+    <p class="eyebrow">Where things live</p>
+    <h2>Requirements and paths.</h2>
+  </div>
+  <div class="detail-grid">
+    <article class="detail-card"><h3>Windows only, for now</h3><p>Windows 10 or 11 (64-bit). macOS and Linux are not supported yet. The architecture is cross-platform, so other operating systems remain future work.</p></article>
+    <article class="detail-card"><h3>Memory</h3><p>About 350 MB with all tabs asleep, plus roughly 125 MB per live dashboard and about 2 MB per open account when dark mode is on. Eight GB of RAM handles the default five warm tabs comfortably.</p></article>
+    <article class="detail-card"><h3>Install path</h3><p>The app installs per user under <code>%LOCALAPPDATA%\Programs</code>. Updates install in place.</p></article>
+    <article class="detail-card"><h3>Data path</h3><p>Accounts, sessions, settings, plugins and encrypted logins live in <code>%APPDATA%\multi-acc-manager</code>. They survive updates and reinstalls.</p></article>
+    <article class="detail-card"><h3>No account, no server</h3><p>The app is local-first: no telemetry, no sign-in to a service of ours, no cloud sync. The repository is public, so update checks need no token.</p></article>
+    <article class="detail-card"><h3>Run from source</h3><p>Developers can <code>npm install</code> then <code>npm start</code>. Smoke suites and release tooling are documented in the repository README.</p></article>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="troubleshooting">
+  <div class="section-head">
+    <p class="eyebrow">If something sticks</p>
+    <h2>The two known escape hatches.</h2>
+  </div>
+  <div class="detail-grid">
+    <article class="detail-card"><h3>SmartScreen on first run</h3><p>Expected while the installer is unsigned. Choose <strong>More info → Run anyway</strong>. This is not a malware report; it is the absence of a signing certificate.</p></article>
+    <article class="detail-card"><h3>A dashboard will not load</h3><p>Google Cloud Console is a known case. Use the <strong>Browser</strong> button in the strip to open that page in your system browser. The rest of the app is unaffected.</p></article>
+  </div>
+  <p class="section-kicker"><a href="faq.html">More answers in the FAQ <span aria-hidden="true">→</span></a></p>
+</section>
+
+<section class="cta wrap">
+  <div class="cta-inner">
+    <p class="eyebrow">Installed already?</p>
+    <h2>Your rail is waiting.</h2>
+    <p>Update to v{{ version }}, or add the account you have been putting off.</p>
+    <div class="hero-actions hero-actions-center">
+      <a class="btn btn-primary" href="{{ latest_release_url }}">Download v{{ version }}</a>
+      <a class="btn btn-secondary" href="features.html">Explore features</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

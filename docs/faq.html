@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FAQ — My Provider Dash Manager</title>
+  <meta name="description" content="Answers about multiple accounts per service, memory use, saved passwords, importing from browsers, SmartScreen, updates and custom services.">
+  <meta name="keywords" content="multi-account manager, isolated browser sessions, Windows desktop app, account switcher, My Provider Dash Manager, multi-account FAQ, Google accounts, password import, SmartScreen, Windows app">
+  <meta name="author" content="FiredMosquito831">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="theme-color" content="#080b11">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="https://providers.danubelabs.net/faq.html">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/xml" title="Sitemap" href="sitemap.xml">
+  <link rel="stylesheet" href="assets/site.css">
+  <noscript><style>
+    @media (max-width: 900px) {
+      .topbar-inner { flex-wrap: wrap; padding: 9px 0; }
+      .site-nav { display: flex; position: static; flex-direction: row; flex-wrap: wrap; width: 100%; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+      .nav-toggle { display: none; }
+    }
+  </style></noscript>
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="My Provider Dash Manager">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="FAQ — My Provider Dash Manager">
+  <meta property="og:description" content="Answers about multiple accounts per service, memory use, saved passwords, importing from browsers, SmartScreen, updates and custom services.">
+  <meta property="og:url" content="https://providers.danubelabs.net/faq.html">
+  <meta property="og:image" content="https://providers.danubelabs.net/og.png">
+  <meta property="og:image:secure_url" content="https://providers.danubelabs.net/og.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="My Provider Dash Manager — the account rail and Home screen, presented as a desktop window">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="FAQ — My Provider Dash Manager">
+  <meta name="twitter:description" content="Answers about multiple accounts per service, memory use, saved passwords, importing from browsers, SmartScreen, updates and custom services.">
+  <meta name="twitter:image" content="https://providers.danubelabs.net/og.png">
+  <meta name="twitter:image:alt" content="My Provider Dash Manager — every account in one window">
+
+  <script type="application/ld+json">[{"@context":"https://schema.org","@type":"SoftwareApplication","name":"My Provider Dash Manager","alternateName":"mpdm","url":"https://providers.danubelabs.net/","description":"A free Windows desktop app that keeps many accounts per cloud and web service signed in at the same time, each in its own fully isolated Chromium session, switchable like browser tabs but built around accounts instead of pages.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Multi-account manager","operatingSystem":"Windows 10, Windows 11","softwareVersion":"0.8.0","downloadUrl":"https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest","installUrl":"https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest","codeRepository":"https://github.com/FiredMosquito831/my-provider-dash-manager","isAccessibleForFree":true,"license":"https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/LICENSE","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["Fully isolated persistent Chromium session per account","37 services built in, plus any site by URL","One window with a left account rail and per-account tabs on top","Built-in ad-blocking driven by EasyList","Dark mode powered by Dark Reader","Saved logins encrypted with Windows DPAPI and origin-bound","Import passwords from Chrome, Edge, Brave, Vivaldi, Opera or CSV","Choose which login autofills per account","Optional read-only API tokens for live status cards","Per-account proxy support","Silent in-place auto-updates from GitHub Releases"],"screenshot":[{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/home.png","caption":"Home with the account rail and one card per account"},{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/services.png","caption":"The service picker grouped by category, the Updates panel and saved logins"},{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/navigation.png","caption":"An account tab open with back, forward, reload, dashboard and the address bar"}]},{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://providers.danubelabs.net/"},{"@type":"ListItem","position":2,"name":"FAQ","item":"https://providers.danubelabs.net/faq.html"}]},{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Can I be signed into two accounts on the same service at once?","acceptedAnswer":{"@type":"Answer","text":"Yes. Each account gets its own Chromium storage partition, so both stay signed in simultaneously and you switch between them like tabs. Nothing is ever signed out to reach the other."}},{"@type":"Question","name":"How much memory does an extra account use?","acceptedAnswer":{"@type":"Answer","text":"Roughly 125 MB of private memory per live dashboard (the figure Task Manager reports), on a ~350 MB baseline with everything asleep. The app keeps five tabs warm by default and sleeps the rest; slept tabs stay in the strip and resume on click."}},{"@type":"Question","name":"Is it safe to store my passwords?","acceptedAnswer":{"@type":"Answer","text":"Saved logins are encrypted with Windows DPAPI and bound to the account and the service's own domains. A password typed on an unrelated page reached from a tab is never captured, and a saved password is never filled into a page outside the service's domains. DPAPI protects against another user on the machine, a stolen disk and casual copying; it does not protect against malware running as you, which no desktop app can. Passwords never reach the app's own UI process."}},{"@type":"Question","name":"Does it work on macOS or Linux?","acceptedAnswer":{"@type":"Answer","text":"Not yet. The app and its installer are Windows-only. The architecture is cross-platform, so other operating systems stay open as future work."}},{"@type":"Question","name":"How do I import passwords from Chrome or Edge?","acceptedAnswer":{"@type":"Answer","text":"Home → Import from browser reads installed Chromium browsers directly. Chrome 127 and newer lock some entries with app-bound encryption that no other app can read; export those to CSV from the browser and use Import CSV instead. Firefox always uses the CSV path. Re-importing updates passwords you have changed."}},{"@type":"Question","name":"Why does SmartScreen warn me?","acceptedAnswer":{"@type":"Answer","text":"The installer is not code-signed yet, so Windows shows a warning the first time. Choose More info → Run anyway. Code signing is planned and removes the warning entirely."}},{"@type":"Question","name":"Can I add a service that is not on the list?","acceptedAnswer":{"@type":"Answer","text":"Yes. Add service by URL gives any site its own rail row and isolated per-account sessions, and JSON plugin manifests can define a service plus how to read its API for status cards."}},{"@type":"Question","name":"What happens to my accounts when I update?","acceptedAnswer":{"@type":"Answer","text":"Nothing is lost. Accounts, sessions, saved logins and settings live in %APPDATA%\\multi-acc-manager and survive updates and reinstalls. Updates install silently in place and relaunch the app."}},{"@type":"Question","name":"Do I need Node.js to use the app?","acceptedAnswer":{"@type":"Answer","text":"Not for the app itself. The standalone Windows executable needs nothing else installed. Node.js 18+ is required only for the npx install and update route."}},{"@type":"Question","name":"Does it sync between computers?","acceptedAnswer":{"@type":"Answer","text":"No. Nothing syncs anywhere: there is no server, no account and no telemetry. Accounts, sessions and saved logins stay on the one Windows machine where you sign in."}},{"@type":"Question","name":"Does it support Chrome Web Store extensions?","acceptedAnswer":{"@type":"Answer","text":"No. Chrome Web Store extensions cannot run inside Electron. The app ships built-in ad-blocking and Dark Reader's engine for dark mode instead."}},{"@type":"Question","name":"Is it free?","acceptedAnswer":{"@type":"Answer","text":"The app is free to use, personally and commercially. It is source-available, not open source: the licence permits use, study and verbatim redistribution, but not modified or derivative distribution. See the licence for the full terms."}},{"@type":"Question","name":"What about provider terms on multiple accounts?","acceptedAnswer":{"@type":"Answer","text":"The app surfaces each provider's stance instead of hiding it. GitHub and Railway allow one account per person and the rail says so — use their organisations and workspaces instead. Other providers treat extra accounts as ordinary, tolerate separate accounts, or expect one per business. Account creation is always manual and guided; nothing is automated."}}]}]</script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar" data-topbar>
+    <div class="topbar-inner">
+      <a class="brand" href="index.html" aria-label="My Provider Dash Manager — home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28" role="img" focusable="false">
+            <rect x="2" y="3" width="28" height="26" rx="5" fill="#0f1722" stroke="#31445c"/>
+            <path d="M2 10h28" stroke="#31445c"/>
+            <rect x="7" y="14" width="5" height="5" rx="1.4" fill="#68a6ff"/>
+            <rect x="14" y="14.5" width="10" height="2" rx="1" fill="#43536a"/>
+            <rect x="7" y="22" width="5" height="3" rx="1.2" fill="#4bd6a3"/>
+            <rect x="14" y="22.5" width="8" height="2" rx="1" fill="#43536a"/>
+            <circle cx="25" cy="6.5" r="1.2" fill="#ff6b6b"/>
+            <circle cx="21.5" cy="6.5" r="1.2" fill="#f2c14e"/>
+            <circle cx="18" cy="6.5" r="1.2" fill="#4bd6a3"/>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <span class="brand-name">Provider Dash</span>
+          <span class="brand-sub">MANAGER · MPDM</span>
+        </span>
+      </a>
+
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-nav-toggle>
+        <span class="nav-toggle-lines" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="sr-only">Toggle navigation</span>
+      </button>
+
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="index.html">Home</a>
+        <a href="features.html">Features</a>
+        <a href="install.html">Install</a>
+        <a href="security.html">Security</a>
+        <a href="faq.html" class="is-current" aria-current="page">FAQ</a>
+        <a href="changelog.html">Changelog</a>
+      </nav>
+
+      <a class="btn btn-small btn-primary topbar-download" href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download <span class="btn-version">v0.8.0</span></a>
+    </div>
+  </header>
+
+  <main id="main">
+<section class="page-hero wrap">
+  <div>
+    <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> Frequently asked questions</p>
+    <h1>Questions,<br><span class="grad">answered plainly.</span></h1>
+    <p class="lede">What the app does with your sessions, passwords and data — including the parts that are Windows-only, unsigned or deliberately not synced.</p>
+    <ul class="hero-facts">
+      <li>13 questions</li>
+      <li>Windows 10 / 11</li>
+      <li>v0.8.0</li>
+    </ul>
+  </div>
+  <aside class="toc" aria-label="Related pages">
+    <p class="toc-title">Go deeper</p>
+    <a href="features.html">Features</a>
+    <a href="install.html">Install &amp; requirements</a>
+    <a href="security.html">Security &amp; privacy</a>
+    <a href="changelog.html">Changelog</a>
+    <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/issues">Ask an issue</a>
+  </aside>
+</section>
+
+<section class="section wrap" id="questions">
+  <div class="faq-list faq-list-large">
+    <details class="faq-item" open>
+      <summary>
+        <span class="faq-number">01</span>
+        <span>Can I be signed into two accounts on the same service at once?</span>
+      </summary>
+      <div class="faq-answer"><p>Yes. Each account gets its own Chromium storage partition, so both stay signed in simultaneously and you switch between them like tabs. Nothing is ever signed out to reach the other.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>
+        <span class="faq-number">02</span>
+        <span>How much memory does an extra account use?</span>
+      </summary>
+      <div class="faq-answer"><p>Roughly 125 MB of private memory per live dashboard (the figure Task Manager reports), on a ~350 MB baseline with everything asleep. The app keeps five tabs warm by default and sleeps the rest; slept tabs stay in the strip and resume on click.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>
+        <span class="faq-number">03</span>
+        <span>Is it safe to store my passwords?</span>
+      </summary>
+      <div class="faq-answer"><p>Saved logins are encrypted with Windows DPAPI and bound to the account and the service&#39;s own domains. A password typed on an unrelated page reached from a tab is never captured, and a saved password is never filled into a page outside the service&#39;s domains. DPAPI protects against another user on the machine, a stolen disk and casual copying; it does not protect against malware running as you, which no desktop app can. Passwords never reach the app&#39;s own UI process.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>
+        <span class="faq-number">04</span>
+        <span>Does it work on macOS or Linux?</span>
+      </summary>
+      <div class="faq-answer"><p>Not yet. The app and its installer are Windows-only. The architecture is cross-platform, so other operating systems stay open as future work.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>
+        <span class="faq-number">05</span>
+        <span>How do I import passwords from Chrome or Edge?</span>
+      </summary>
+      <div class="faq-answer"><p>Home → Import from browser reads installed Chromium browsers directly. Chrome 127 and newer lock some entries with app-bound encryption that no other app can read; export those to CSV from the browser and use Import CSV instead. Firefox always uses the CSV path. Re-importing updates passwords you have changed.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>
+        <span class="faq-number">06</span>
+        <span>Why does SmartScreen warn me?</span>
+      </summary>
+      <div class="faq-answer"><p>The installer is not code-signed yet, so Windows shows a warning the first time. Choose More info → Run anyway. Code signing is planned and removes the warning entirely.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>
+        <span class="faq-number">07</span>
+        <span>Can I add a service that is not on the list?</span>
+      </summary>
+      <div class="faq-answer"><p>Yes. Add service by URL gives any site its own rail row and isolated per-account sessions, and JSON plugin manifests can define a service plus how to read its API for status cards.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>
+        <span class="faq-number">08</span>
+        <span>What happens to my accounts when I update?</span>
+      </summary>
+      <div class="faq-answer"><p>Nothing is lost. Accounts, sessions, saved logins and settings live in %APPDATA%\multi-acc-manager and survive updates and reinstalls. Updates install silently in place and relaunch the app.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>
+        <span class="faq-number">09</span>
+        <span>Do I need Node.js to use the app?</span>
+      </summary>
+      <div class="faq-answer"><p>Not for the app itself. The standalone Windows executable needs nothing else installed. Node.js 18+ is required only for the npx install and update route.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>
+        <span class="faq-number">10</span>
+        <span>Does it sync between computers?</span>
+      </summary>
+      <div class="faq-answer"><p>No. Nothing syncs anywhere: there is no server, no account and no telemetry. Accounts, sessions and saved logins stay on the one Windows machine where you sign in.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>
+        <span class="faq-number">11</span>
+        <span>Does it support Chrome Web Store extensions?</span>
+      </summary>
+      <div class="faq-answer"><p>No. Chrome Web Store extensions cannot run inside Electron. The app ships built-in ad-blocking and Dark Reader&#39;s engine for dark mode instead.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>
+        <span class="faq-number">12</span>
+        <span>Is it free?</span>
+      </summary>
+      <div class="faq-answer"><p>The app is free to use, personally and commercially. It is source-available, not open source: the licence permits use, study and verbatim redistribution, but not modified or derivative distribution. See the licence for the full terms.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>
+        <span class="faq-number">13</span>
+        <span>What about provider terms on multiple accounts?</span>
+      </summary>
+      <div class="faq-answer"><p>The app surfaces each provider&#39;s stance instead of hiding it. GitHub and Railway allow one account per person and the rail says so — use their organisations and workspaces instead. Other providers treat extra accounts as ordinary, tolerate separate accounts, or expect one per business. Account creation is always manual and guided; nothing is automated.</p></div>
+    </details>
+  </div>
+</section>
+
+<section class="section section-flush wrap" id="more">
+  <div class="section-head split-head">
+    <div>
+      <p class="eyebrow">Still deciding?</p>
+      <h2>The long version is on the other pages.</h2>
+    </div>
+    <p>Every claim here comes from the app's README, design notes or source. Where a limitation exists, it is listed rather than rounded away.</p>
+  </div>
+  <div class="detail-grid">
+    <a class="detail-card detail-link" href="features.html"><h3>Features</h3><p>Isolation, layout, the password manager, status cards, updates, ad-blocking and extensibility.</p><span class="card-link">Explore features <span aria-hidden="true">→</span></span></a>
+    <a class="detail-card detail-link" href="install.html"><h3>Install</h3><p>npx and installer routes, requirements, update paths, the CLI and where your data lives.</p><span class="card-link">Install guide <span aria-hidden="true">→</span></span></a>
+    <a class="detail-card detail-link" href="security.html"><h3>Security</h3><p>DPAPI, origin-bound credentials, session isolation and the honest threat model.</p><span class="card-link">Security model <span aria-hidden="true">→</span></span></a>
+  </div>
+</section>
+
+<section class="cta wrap">
+  <div class="cta-inner">
+    <p class="eyebrow">No account required</p>
+    <h2>Try it with one real identity.</h2>
+    <p>Download v0.8.0, add one account, and see whether the rail earns its place in your day.</p>
+    <div class="hero-actions hero-actions-center">
+      <a class="btn btn-primary" href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download for Windows</a>
+      <a class="btn btn-secondary" href="https://github.com/FiredMosquito831/my-provider-dash-manager">View source</a>
+    </div>
+  </div>
+</section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a class="brand brand-footer" href="index.html" aria-label="My Provider Dash Manager — home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="26" height="26" role="img" focusable="false">
+              <rect x="2" y="3" width="28" height="26" rx="5" fill="#0f1722" stroke="#31445c"/>
+              <path d="M2 10h28" stroke="#31445c"/>
+              <rect x="7" y="14" width="5" height="5" rx="1.4" fill="#68a6ff"/>
+              <rect x="14" y="14.5" width="10" height="2" rx="1" fill="#43536a"/>
+              <rect x="7" y="22" width="5" height="3" rx="1.2" fill="#4bd6a3"/>
+              <rect x="14" y="22.5" width="8" height="2" rx="1" fill="#43536a"/>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <span class="brand-name">My Provider Dash Manager</span>
+            <span class="brand-sub">WINDOWS · LOCAL-FIRST</span>
+          </span>
+        </a>
+        <p>One desktop app for every account you own. Real dashboards, real sessions, each identity in its own isolated Chromium partition.</p>
+      </div>
+
+      <div class="footer-links">
+        <div>
+          <h2 class="footer-heading">Product</h2>
+          <a href="index.html">Home</a>
+          <a href="features.html">Features</a>
+          <a href="install.html">Install &amp; requirements</a>
+          <a href="security.html">Security &amp; privacy</a>
+        </div>
+        <div>
+          <h2 class="footer-heading">Resources</h2>
+          <a href="faq.html">FAQ</a>
+          <a href="changelog.html">Changelog</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download v0.8.0</a>
+          <a href="https://www.npmjs.com/package/my-provider-dash-manager">npm package</a>
+        </div>
+        <div>
+          <h2 class="footer-heading">Project</h2>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager">Source on GitHub</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager#readme">README</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/docs/CHANGELOG.md">Raw changelog</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/LICENSE">Licence</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>© 2026 FiredMosquito831. Source-available; free for personal and commercial use.</p>
+      <p>Not affiliated with any service listed. Windows is a trademark of Microsoft Corporation.</p>
+    </div>
+  </footer>
+
+  <script src="assets/site.js" defer></script>
+</body>
+</html>
