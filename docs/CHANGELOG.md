@@ -2,6 +2,15 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.10.1 — 2026-11-03
+
+### Fixed
+- **The 0.10.0 smoke check for clipboard copy was false-red on cold runs.** On the day's first
+  suite run the two `smoke:creds` copy checks could fail even though the copy itself succeeded:
+  the check read the clipboard back once and lost the race with Windows' clipboard settling. The
+  check now polls the read-back (2.5 s, one retry) after the required warm-up write. No product
+  behaviour changed; the copy feature itself was never affected.
+
 ## 0.10.0 — 2026-11-03
 
 ### Added

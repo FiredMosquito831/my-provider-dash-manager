@@ -1218,16 +1218,35 @@ async function runSmokeCreds() {
       const sibling = copyCredentialField(otherAcct.id, 'password', 'vercel', 'team-a', 'https://vercel.com/login');
       check('copy-refused-another-accounts-capture', sibling.ok === false && sibling.reason === 'other-account', `reason=${sibling.reason}`);
       clipboard.clear();
-      // the real copy path: main writes the clipboard, and the answer is a label — never the secret
+      // WARM-UP WRITE (required): on this machine the first writeText after clear() in a fresh
+      // process does not yet round-trip through readText — this sentinel is what makes the very
+      // first read-back reliable at all (proved 2026-11-03: removing it made every copy check fail).
+      // A cold machine (the day's first run) can still be slow even with the warm-up, hence the poll.
       clipboard.writeText('sentinel-before-copy');
+      // the real copy path: main writes the clipboard, and the answer is a label — never the secret.
+      // A cold machine can take a moment before the Win32 clipboard returns what was just written
+      // (observed 2026-11-03: the day's first suite run read back stale values; every rerun passed),
+      // so poll the read-back and retry the write once — a genuine write regression still fails hard.
+      const clipboardSettles = async (doWrite, expected) => {
+        let last = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          last = doWrite();
+          const deadline = Date.now() + 2500;
+          while (Date.now() < deadline) {
+            if (clipboard.readText() === expected) return { last, text: clipboard.readText() };
+            await new Promise(r => setTimeout(r, 50));
+          }
+        }
+        return { last, text: clipboard.readText() };
+      };
       const sharedRow = siteA.rows.find(r => r.username === 'shared@example.com');
-      const copied = copyCredentialField(sharedRow.id, 'password', 'vercel', 'team-a', 'https://vercel.com/login');
+      const pw = await clipboardSettles(() => copyCredentialField(sharedRow.id, 'password', 'vercel', 'team-a', 'https://vercel.com/login'), 'shared-pw');
       check('copy-writes-the-right-password-to-the-clipboard',
-        copied.ok === true && clipboard.readText() === 'shared-pw' && !JSON.stringify(copied).includes('shared-pw'),
-        `ok=${copied.ok} label="${copied.label}" clipboard-match=${clipboard.readText() === 'shared-pw'}`);
-      const copiedUser = copyCredentialField(sharedRow.id, 'username', 'vercel', 'team-a', 'https://vercel.com/login');
-      check('copy-email-writes-the-username', copiedUser.ok === true && clipboard.readText() === 'shared@example.com',
-        `label="${copiedUser.label}"`);
+        pw.last.ok === true && pw.text === 'shared-pw' && !JSON.stringify(pw.last).includes('shared-pw'),
+        `ok=${pw.last.ok} label="${pw.last.label}" clipboard-match=${pw.text === 'shared-pw'}`);
+      const mail = await clipboardSettles(() => copyCredentialField(sharedRow.id, 'username', 'vercel', 'team-a', 'https://vercel.com/login'), 'shared@example.com');
+      check('copy-email-writes-the-username', mail.last.ok === true && mail.text === 'shared@example.com',
+        `label="${mail.last.label}" clipboard-match=${mail.text === 'shared@example.com'}`);
       const badField = copyCredentialField(sharedRow.id, 'reveal', 'vercel', 'team-a', 'https://vercel.com/login');
       check('copy-refuses-an-unknown-field', badField.ok === false && badField.reason === 'bad-field', `reason=${badField.reason}`);
       clipboard.clear();
