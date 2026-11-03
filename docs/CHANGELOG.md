@@ -2,6 +2,41 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.13.0 — 2026-11-03
+
+### Fixed
+- **Saved logins now survive every restart.** On some machines — this one included — Windows'
+  credential encryption uses a key that is only valid inside the process that wrote it, so a store
+  written before you quit could not be read after you relaunch. The app then showed an empty saved
+  logins list everywhere: no auto-fill, no picker, no manager rows, on every account. The store is now
+  encrypted with **AES-256-GCM** under a 32-byte key kept next to it in the app's own profile folder
+  (the same place your sessions and cookies already live), so it has no per-process key and reads back
+  identically after a restart, an update, or a crash. From now on saved logins survive every restart.
+- **An older store that cannot be read is reported, not silently swallowed.** If a saved-login store
+  written by an earlier version cannot be decrypted on your machine, the app says so plainly on the
+  Home screen instead of showing an empty list that looks like "you never saved anything":
+  *Saved logins from an older version could not be read on this machine (Windows per-process
+  encryption quirk) — re-import once and they will survive every future restart.* The old file is left
+  untouched on disk, and a re-import switches the store over by itself.
+- **A damaged store is refused honestly.** A store whose contents fail their integrity check is now
+  reported as unreadable (with the file left as it was) rather than being handed back as mangled
+  passwords. Every write is atomic, so an interrupted save cannot leave a half-written store.
+
+### Changed
+- **One-time re-import for existing installs.** Logins saved by an earlier version on an affected
+  machine are genuinely unreadable there, so the update cannot recover them. **Re-import your logins
+  once** — *Import from browser* (including Firefox profiles), or *Import CSV* — and they are written
+  in the new format. That is the last time you will need to: from then on they survive every restart.
+  On machines where the old store *was* readable, the migration happens automatically on first launch
+  and your logins, their ids and their ★ defaults are kept exactly as they were.
+- The Saved logins panel now says **"encrypted with AES-256-GCM, survives restarts"** instead of
+  naming Windows DPAPI, which no longer encrypts this store. API tokens are unchanged (still DPAPI);
+  so are the account sessions and cookies.
+
+Suite grows 179 → 188 checks: `smoke:creds` 56 → 65, including a **two-launch** check that starts the
+app twice on one scratch profile, saves a login in the first and requires the second to list it. That
+check fails on the old store code and passes on the new one — the regression proof for this bug.
+
 ## 0.12.1 — 2026-11-03
 
 ### Fixed

@@ -223,7 +223,15 @@ works in the app. Anything else can be added by URL or as a plugin.
   profile with a **master password** set, or one from Firefox 62 or earlier, is refused with a
   specific message instead of importing nothing quietly; both cases point you at the CSV route. A
   CSV exported by any browser still imports too.
-- Encrypted at rest with Windows DPAPI. Passwords never reach the app's own UI process.
+- **Survives restarts.** Saved logins are encrypted with AES-256-GCM and read back identically after
+  you quit and relaunch — on every machine, including ones whose Windows credential encryption only
+  works inside the process that wrote it. Passwords never reach the app's own UI process.
+- **Existing installs: re-import once.** A store written by an earlier version on such a machine is
+  genuinely unreadable there, so the update cannot recover it. Re-import once (*Import from browser*
+  or *Import CSV*) and your logins are written in the new format — from then on they survive every
+  restart. On machines where the old store was readable, the migration is automatic and keeps your
+  logins, their ids and their ★ defaults. If an old store cannot be read, the Home screen says so
+  plainly instead of showing an empty list.
 - **Origin-bound**: a login is tied to the account *and* the service's own domains. A password typed on
   another site reached from that tab (an OAuth hand-off, a look-alike page) is never captured as that
   account's login, and a saved password is never filled into a page outside the service's domains.
@@ -289,12 +297,14 @@ anything to the page.
 
 State lives in `%APPDATA%\multi-acc-manager`: `accounts.json` (the registry), `session.json` (open
 tabs), `settings.json`, `services.json` (custom services), `plugins/`, plus DPAPI-encrypted
-`tokens.json` and `credentials.json`.
+`tokens.json` and the AES-256-GCM-encrypted `credentials.json` with its `credkey` key file.
 
 ### Security posture, honestly
 
-Cookies, tokens and saved passwords are encrypted at rest with Windows DPAPI, which protects against
-another user on the machine, a stolen disk, and casual copying. It does **not** protect against
+Cookies, tokens and saved passwords are encrypted at rest, and protect against another user on the
+machine, a stolen disk, and casual copying. Cookies and API tokens use Windows DPAPI; saved logins
+use AES-256-GCM under a key in the app's own profile folder, so they read back after a restart (DPAPI's
+key on some machines only works inside the process that wrote it). Neither protects against
 malware running as you — no desktop app can, which is why the app never masks device identity and
 keeps API tokens scoped and revocable. Saved logins are additionally bound to the service's own
 origins, so they cannot be captured from, or filled into, an unrelated site. The address bar accepts
@@ -323,11 +333,15 @@ baseline with everything asleep. The app keeps five tabs warm by default and sle
 tabs stay in the strip and resume on click.
 
 **Is it safe to store my passwords?**
-Saved logins are encrypted with Windows DPAPI and bound to the account *and* the service's own
+Saved logins are encrypted at rest with AES-256-GCM under a 32-byte key kept in the app's own profile
+folder, beside the sessions and cookies, and are bound to the account *and* the service's own
 domains — a password typed on an unrelated page reached from a tab is never captured, and a saved
-password is never filled into a page outside the service's domains. DPAPI protects against another
-user on the machine, a stolen disk and casual copying; it does not protect against malware running as
-you, which no desktop app can. Passwords never reach the app's own UI process.
+password is never filled into a page outside the service's domains. A store that fails its integrity
+check is refused rather than used, and writes are atomic. This protects against another user on the
+machine, a stolen disk and casual copying — the key file lives under your Windows user account; it
+does not protect against malware running as you, which no desktop app can. Unlike Windows' own
+per-process credential encryption, the store reads back identically after a restart, which is why
+saved logins survive quitting the app. Passwords never reach the app's own UI process.
 
 **Does it work on macOS or Linux?**
 Not yet — the app and its installer are Windows-only. The architecture is cross-platform, so other
@@ -381,7 +395,7 @@ npm start              # run the app
 npm run smoke          # sessions, registry, partitions, tab navigation (12 checks)
 npm run smoke:restore  # sessions survive a restart (real cookies)
 npm run smoke:tokens   # DPAPI round-trip + live fake-token rejection per provider (15)
-npm run smoke:creds    # import (CSV + direct Firefox), per-account/manager/site lists, defaults, copy, fill fallback, auto-fill plan, encryption at rest (56)
+npm run smoke:creds    # import (CSV + direct Firefox), per-account/manager/site lists, defaults, copy, fill fallback, auto-fill plan, encryption at rest, the store surviving a real two-launch restart (65)
 npm run smoke:autofill # real page: form detection, fill + request ids, undo, capture, origin guard (15)
 npm run smoke:updates  # version comparison, silent-install mode, auto-update toggle, real release-feed check (11)
 npm run smoke:services # every built-in login page loads inside an isolated partition (42)
@@ -394,7 +408,7 @@ npm start -- --print-paths            # show the app name, version and data fold
 npm start -- --open vercel::personal  # open an account on launch
 ```
 
-The suite is 179 checks across eight modes. `MAM_USER_DATA=<dir>` points any command at an isolated
+The suite is 188 checks across eight modes. `MAM_USER_DATA=<dir>` points any command at an isolated
 profile.
 
 Releases are cut by pushing a `v*` tag: GitHub Actions checks the tag against `package.json`, builds

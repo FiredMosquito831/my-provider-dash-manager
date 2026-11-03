@@ -10,7 +10,8 @@
 //      a master password, or the pre-63 key format, is refused with a specific message.
 //   3. CSV import: every browser (including Firefox) can export passwords to CSV. Always works.
 //
-// Stored credentials are encrypted at rest with safeStorage (DPAPI on Windows), like API tokens.
+// Stored credentials: a v2 AES-256-GCM store whose key sidecar makes it survive restarts (0.13.0).
+// The old safeStorage/DPAPI format is read once and migrated; see the store section below.
 const { app, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -20,37 +21,188 @@ const { DatabaseSync } = require('node:sqlite');
 const firefoxImport = require('./firefox-import');
 
 function credsFile() { return path.join(app.getPath('userData'), 'credentials.json'); }
+function credKeyFile() { return path.join(app.getPath('userData'), 'credkey'); }
+function legacyBackupFile() { return path.join(app.getPath('userData'), 'credentials.v1-unreadable.json'); }
 
-// ---------- encrypted store ----------
-function loadAll() {
+// ---------- encrypted store (v2, 0.13.0) ----------
+// The store used to be encrypted with safeStorage (DPAPI). On this machine DPAPI's key is per-PROCESS:
+// a blob written by one launch cannot be decrypted by the next one, so every restart read the store
+// as empty and every logins UI showed nothing (proved 2026-11-03 with a bare two-process probe and
+// with unmodified 0.9.0 code against a separately-seeded profile). v2 uses node:crypto AES-256-GCM
+// with a 32-byte random key in `credkey` beside the store, inside the app's own profile folder — the
+// same place the sessions and cookies live, so the same protection boundary (your Windows user
+// account), but no per-process key, so it survives every restart. No new dependency.
+//
+// Layout: credentials.json = { v: 2, alg, iv, tag, ct, count, savedAt } (all binary as base64).
+// A v1 file ({ ct: <safeStorage ciphertext> }) is migrated on the first load that can read it.
+const STORE_V2 = 2;
+const LEGACY_NOTICE = 'Saved logins from an older version could not be read on this machine '
+  + '(Windows per-process encryption quirk) — re-import once and they will survive every future restart.';
+
+let lastLoadError = null;                 // { code, message } — surfaced honestly, never swallowed
+let legacyState = { key: '', unreadable: false }; // the v1 file we already failed to decrypt
+
+// The v1 file is re-probed whenever its mtime/size change, so a cached "unreadable" answer can never
+// pin an empty list after the file is legitimately replaced (the 0.9.0 cache lesson).
+function legacySignature() {
   try {
-    const raw = JSON.parse(fs.readFileSync(credsFile(), 'utf8'));
-    if (!raw.ct) return [];
-    if (!safeStorage.isEncryptionAvailable()) return [];
-    const decoded = JSON.parse(safeStorage.decryptString(Buffer.from(raw.ct, 'base64')));
-    if (!Array.isArray(decoded)) return [];
-    // Add stable encrypted ids/default lists to entries created by older versions. The migration
-    // stays inside the DPAPI-encrypted payload; no password metadata is written to a plaintext sidecar.
-    let migrated = false;
-    const list = decoded.map(c => {
-      if (!c.id) { migrated = true; c.id = crypto.randomUUID(); }
-      if (!Array.isArray(c.defaultForAccounts)) { migrated = true; c.defaultForAccounts = []; }
-      return c;
-    });
-    if (migrated) { try { saveAll(list); } catch {} }
+    const st = fs.statSync(credsFile());
+    return { key: `${st.mtimeMs}:${st.size}` };
+  } catch { return { key: '' }; }
+}
+
+// Is the file on disk still a v1 (safeStorage) store? Read straight from disk, never from the caller's
+// belief: it decides whether the one-time "unreadable old store" notice applies, so a stale answer
+// would either hide an honest warning or invent one.
+function v1OnDisk() {
+  try { return !JSON.parse(fs.readFileSync(credsFile(), 'utf8')).v; } catch { return false; }
+}
+
+function storeError(code, message) {
+  lastLoadError = { code, message };
+  console.warn(`[logins] store unreadable (${code}): ${message}`);
+  return [];
+}
+
+function readCredKey({ create = false } = {}) {
+  const file = credKeyFile();
+  try {
+    const key = Buffer.from(String(fs.readFileSync(file, 'utf8')).trim(), 'base64');
+    if (key.length === 32) return key;
+  } catch {}
+  if (!create) return null;
+  const key = crypto.randomBytes(32);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, key.toString('base64'), { mode: 0o600 }); // 0600 where the OS honours it
+  return key;
+}
+
+function encryptStore(list) {
+  const key = readCredKey({ create: true });
+  const iv = crypto.randomBytes(12); // a fresh IV on every write — never reused with the same key
+  const c = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ct = Buffer.concat([c.update(JSON.stringify(list), 'utf8'), c.final()]);
+  return {
+    v: STORE_V2, alg: 'aes-256-gcm', keyFile: 'credkey',
+    iv: iv.toString('base64'), tag: c.getAuthTag().toString('base64'), ct: ct.toString('base64'),
+    count: list.length, savedAt: new Date().toISOString(),
+  };
+}
+
+// The auth tag is the integrity check: setAuthTag() feeds it in and final() verifies it, so a
+// corrupted ciphertext OR tag is refused instead of being handed back as mangled plaintext.
+function decryptStore(raw) {
+  const key = readCredKey();
+  if (!key) throw Object.assign(new Error('the store key (credkey) is missing'), { code: 'NO_KEY' });
+  const iv = Buffer.from(String(raw.iv || ''), 'base64');
+  const tag = Buffer.from(String(raw.tag || ''), 'base64');
+  const ct = Buffer.from(String(raw.ct || ''), 'base64');
+  if (iv.length !== 12 || tag.length !== 16 || !ct.length) {
+    throw Object.assign(new Error('the store file is malformed'), { code: 'MALFORMED' });
+  }
+  let plain;
+  try {
+    const d = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    d.setAuthTag(tag);
+    plain = Buffer.concat([d.update(ct), d.final()]).toString('utf8');
+  } catch {
+    throw Object.assign(new Error('the store failed its integrity check (wrong key or damaged file)'), { code: 'AUTH' });
+  }
+  let parsed;
+  try { parsed = JSON.parse(plain); } catch { throw Object.assign(new Error('the store holds invalid JSON'), { code: 'MALFORMED' }); }
+  if (!Array.isArray(parsed)) throw Object.assign(new Error('the store is not a list of logins'), { code: 'MALFORMED' });
+  return parsed;
+}
+
+function writeStoreFile(blob) {
+  const file = credsFile();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(blob, null, 2));
+  fs.renameSync(tmp, file); // atomic replace: a crash mid-write never leaves a half-written store
+}
+
+// Add stable encrypted ids/default lists to entries created by older versions. They stay inside the
+// encrypted payload; no password metadata is written to a plaintext sidecar.
+function normalizeList(decoded) {
+  let migrated = false;
+  const list = decoded.map(c => {
+    if (!c.id) { migrated = true; c.id = crypto.randomUUID(); }
+    if (!Array.isArray(c.defaultForAccounts)) { migrated = true; c.defaultForAccounts = []; }
+    return c;
+  });
+  return { list, migrated };
+}
+
+function loadAll() {
+  lastLoadError = null;
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(credsFile(), 'utf8')); } catch { return []; } // no store yet
+  if (!raw || typeof raw !== 'object') return [];
+
+  if (raw.v === STORE_V2) {
+    let decoded;
+    try { decoded = decryptStore(raw); } catch (err) { return storeError(err.code || 'DECRYPT', err.message); }
+    legacyState = { key: '', unreadable: false }; // a v2 store replaced any v1 file on disk
+    const { list, migrated } = normalizeList(decoded);
+    if (migrated) { try { saveAll(list); } catch (err) { lastLoadError = { code: 'WRITE', message: err.message }; } }
     return list;
-  } catch { return []; }
+  }
+
+  if (!raw.ct) return [];
+  // v1 (safeStorage/DPAPI). One-time migration: this process can still read it in-process, so
+  // re-encrypt to v2 now and replace the file. If it CANNOT be read (the cross-process quirk), the
+  // old file is left exactly as it is and the app says so honestly instead of pretending it is empty.
+  const sig = legacySignature();
+  if (legacyState.unreadable && legacyState.key === sig.key) return [];
+  if (!safeStorage.isEncryptionAvailable()) return storeError('OS_UNAVAILABLE', 'OS secure storage is not available yet');
+  let decoded;
+  try {
+    decoded = JSON.parse(safeStorage.decryptString(Buffer.from(raw.ct, 'base64')));
+  } catch (err) {
+    legacyState = { key: sig.key, unreadable: true };
+    console.warn('[logins] the old DPAPI store cannot be decrypted in this process — leaving it untouched');
+    return [];
+  }
+  if (!Array.isArray(decoded)) return [];
+  const { list } = normalizeList(decoded);
+  try {
+    saveAll(list); // v1 -> v2; ids and default flags survive because they were normalised first
+    console.log(`[logins] migrated ${list.length} saved login(s) to the restart-safe AES-256-GCM store`);
+  } catch (err) {
+    lastLoadError = { code: 'WRITE', message: err.message }; // keep serving the readable v1 list
+  }
+  return list;
 }
 
 function saveAll(list) {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('OS secure storage unavailable');
   for (const c of list) {
     if (!c.id) c.id = crypto.randomUUID();
     if (!Array.isArray(c.defaultForAccounts)) c.defaultForAccounts = [];
   }
-  const ct = safeStorage.encryptString(JSON.stringify(list)).toString('base64');
-  fs.mkdirSync(path.dirname(credsFile()), { recursive: true });
-  fs.writeFileSync(credsFile(), JSON.stringify({ ct, count: list.length, savedAt: new Date().toISOString() }, null, 2));
+  // A v1 store that could not be read is preserved under its own name before v2 takes over the path:
+  // a re-import is the recovery, but losing the old bytes silently would not be honest.
+  if (legacyState.unreadable && legacyState.key === legacySignature().key) {
+    try { fs.copyFileSync(credsFile(), legacyBackupFile()); } catch {}
+  }
+  writeStoreFile(encryptStore(list));
+  legacyState = { key: '', unreadable: false };
+  lastLoadError = null;
+}
+
+// What the app needs to say about the store: whether an old-format store is sitting there unreadable
+// (the one-time "re-import once" notice), and whether the current store failed its integrity check.
+function storeState() {
+  loadAll(); // never answer from a stale probe
+  // Both conditions are needed: the file must STILL be the old format, and this process must have
+  // failed to read it. A v1 file that decrypted fine has already been migrated away by loadAll.
+  const legacyUnreadable = v1OnDisk() && legacyState.unreadable;
+  return {
+    format: STORE_V2,
+    legacyUnreadable,
+    notice: legacyUnreadable ? LEGACY_NOTICE : null,
+    error: lastLoadError ? { code: lastLoadError.code, message: lastLoadError.message } : null,
+  };
 }
 
 function hostOf(url) {
@@ -468,15 +620,21 @@ function stats() {
   const list = loadAll();
   const bySource = {};
   for (const c of list) bySource[c.source] = (bySource[c.source] || 0) + 1;
-  return { total: list.length, bySource, available: safeStorage.isEncryptionAvailable() };
+  return { total: list.length, bySource, available: true, format: STORE_V2 };
 }
 
-function clearAll() { try { fs.rmSync(credsFile(), { force: true }); } catch {} return true; }
+function clearAll() {
+  try { fs.rmSync(credsFile(), { force: true }); } catch {}
+  try { fs.rmSync(legacyBackupFile(), { force: true }); } catch {}
+  legacyState = { key: '', unreadable: false };
+  lastLoadError = null;
+  return true;
+}
 
 module.exports = {
   listChromiumProfiles, importFromChromium, importFromCsv,
   listFirefoxProfiles, importFromFirefox,
-  matchesFor, fillInto, stats, clearAll, loadAll, listCredentials,
+  matchesFor, fillInto, stats, clearAll, loadAll, listCredentials, storeState,
   rememberForAccount, forAccount, candidatesForAccount, candidateSummariesForAccount, credentialForAccount, credentialFor,
   setDefaultForAccount, deleteCredential, hostOf, hostRelated, removeForAccount,
 };

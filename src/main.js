@@ -1,6 +1,7 @@
 const { app, BaseWindow, BrowserWindow, WebContentsView, session, ipcMain, shell, Menu, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const crypto = require('crypto');
 const SERVICES = require('./services');
 const tokens = require('./api-tokens');
@@ -1131,6 +1132,40 @@ async function runSmokeServices() {
 }
 
 // ---------- smoke creds: CSV import, per-account remember/recall, encryption at rest ----------
+
+// The two-launch proof (0.13.0) needs REAL separate processes: the bug was that a store written by
+// one process could not be read by another. This child mode runs on the SAME scratch profile as its
+// parent (`--cross-process-*` is deliberately absent from TEST_FLAGS so MAM_USER_DATA is never
+// rewritten) and either seeds one known login or reports what it can read.
+//
+// The answer goes to a RESULT FILE (`<userData>/cross-process-<mode>.json`), not stdout: Electron on
+// this machine intermittently exits with 0xC0000005 (access violation) from its own teardown AFTER the
+// work is done, which makes both the exit code and a stdio read-back unreliable evidence. The file is
+// written from inside the app before exit, so it is proof of the work regardless of how teardown goes.
+const CROSS_PROCESS_CRED = { host: 'restart.example.test', username: 'restart-check@example.test', password: 'restart-check-pw-0.13.0' };
+function crossProcessResultFile(mode) { return path.join(app.getPath('userData'), `cross-process-${mode}.json`); }
+function runCrossProcess({ seed }) {
+  const mode = seed ? 'seed' : 'read';
+  let payload;
+  try {
+    if (seed) {
+      // The whole point of the seed: write through the real store path, then exit. Process B must be
+      // able to read it back with nothing shared between them but the profile directory.
+      creds.rememberForAccount('vercel', 'restartcheck', { url: `https://${CROSS_PROCESS_CRED.host}/login`, ...CROSS_PROCESS_CRED });
+      payload = { pid: process.pid, ok: true, seeded: creds.stats().total, format: creds.storeState().format };
+    } else {
+      const rows = creds.loadAll().filter(c => c.host === CROSS_PROCESS_CRED.host && c.username === CROSS_PROCESS_CRED.username);
+      payload = { pid: process.pid, ok: true, found: rows.length, passwordMatches: rows.length === 1 && rows[0].password === CROSS_PROCESS_CRED.password, total: creds.stats().total };
+    }
+  } catch (err) { payload = { pid: process.pid, ok: false, error: err.message }; }
+  try {
+    fs.mkdirSync(path.dirname(crossProcessResultFile(mode)), { recursive: true });
+    fs.writeFileSync(crossProcessResultFile(mode), JSON.stringify(payload));
+  } catch {}
+  console.log(`[cross-process] ${JSON.stringify(payload)}`);
+  return app.exit(0);
+}
+
 async function runSmokeCreds() {
   const results = { mode: 'creds', checks: [] };
   const check = (name, ok, detail = '') => { results.checks.push({ name, ok, detail }); console.log(`[smoke:creds] ${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`); };
@@ -1522,10 +1557,169 @@ async function runSmokeCreds() {
     check('exception:firefox', false, err.message);
   }
 
+  // ---------- 0.13.0: the store survives a restart (the owner's Supabase report) ----------
+  // The bug was not in any UI: safeStorage's DPAPI key is per-PROCESS on this machine, so a store
+  // written by one launch could never be read by the next. v2 (AES-256-GCM + a `credkey` sidecar)
+  // has no per-process key. These checks prove the whole chain, and each one is written so it FAILS
+  // on the old code: the two-launch check reads a store a DIFFERENT process wrote, and the damaged-tag
+  // check refuses a blob whose auth tag was flipped (a JSON.parse failure alone would not prove the
+  // auth check exists — a flipped CIPHERTEXT byte invalidates the JSON and would fail either way).
+  try {
+    const { safeStorage } = require('electron');
+    const storeFile = path.join(app.getPath('userData'), 'credentials.json');
+    const keyFile = path.join(app.getPath('userData'), 'credkey');
+    const readStore = () => JSON.parse(fs.readFileSync(storeFile, 'utf8'));
+
+    // (1) v2 at rest: the raw file carries an AES-256-GCM blob, none of the fixture plaintext, and
+    // the key sidecar is a 32-byte (44 base64 char) key — never the plaintext itself.
+    creds.clearAll();
+    const csvV2 = path.join(app.getPath('temp'), `mam-creds-v2-${process.pid}.csv`);
+    fs.writeFileSync(csvV2, 'url,username,password\nhttps://vercel.com/login,v2.user@example.com,v2-plaintext-secret\n');
+    try {
+      creds.importFromCsv(csvV2);
+      const rawV2 = readStore();
+      const keyText = fs.readFileSync(keyFile, 'utf8').trim();
+      const encCheck = fs.readFileSync(storeFile, 'utf8');
+      check('store-v2-encrypted-at-rest',
+        rawV2.v === 2 && rawV2.alg === 'aes-256-gcm' && rawV2.keyFile === 'credkey'
+          && typeof rawV2.iv === 'string' && typeof rawV2.tag === 'string' && typeof rawV2.ct === 'string'
+          && Buffer.from(rawV2.iv, 'base64').length === 12 && Buffer.from(rawV2.tag, 'base64').length === 16
+          && !encCheck.includes('v2-plaintext-secret') && !encCheck.includes('v2.user@example.com')
+          && keyText.length === 44 && Buffer.from(keyText, 'base64').length === 32
+          && keyText !== encCheck && !encCheck.includes(keyText),
+        `v=${rawV2.v} alg=${rawV2.alg} iv=${Buffer.from(rawV2.iv, 'base64').length}B tag=${Buffer.from(rawV2.tag, 'base64').length}B key=${Buffer.from(keyText, 'base64').length}B file=${encCheck.length}B`);
+    } finally { try { fs.rmSync(csvV2, { force: true }); } catch {} }
+
+    // (2) a corrupted AUTH TAG is refused, honestly — never handed back as mangled plaintext and
+    // never silently treated as "no logins". The tag check lives in final(); this is its proof.
+    {
+      const before = readStore();
+      const badTag = Buffer.from(before.tag, 'base64'); badTag[0] ^= 0xff;
+      fs.writeFileSync(storeFile, JSON.stringify({ ...before, tag: badTag.toString('base64') }, null, 2));
+      const damagedRows = creds.loadAll();
+      const damagedState = creds.storeState();
+      check('store-v2-refuses-damaged-blob',
+        damagedRows.length === 0 && !!damagedState.error && damagedState.error.code === 'AUTH'
+          && /integrity/.test(damagedState.error.message || '') && !damagedState.legacyUnreadable,
+        `${damagedRows.length} rows, error=${damagedState.error ? damagedState.error.code : 'none'}`);
+      // put the good store back for the rest of the suite
+      fs.writeFileSync(storeFile, JSON.stringify(before, null, 2));
+      creds.loadAll();
+      check('store-v2-recovers-when-the-file-is-intact', creds.stats().total === 1, `${creds.stats().total} row(s)`);
+    }
+
+    // (3) v1 migration: an old-format store this process CAN read is re-encrypted to v2 on load, and
+    // its ids + default flags survive byte-identically (losing an id would silently un-star a login).
+    {
+      const v1List = [
+        { id: 'keep-id-alpha', host: 'vercel.com', url: 'https://vercel.com/login', username: 'old@example.com', password: 'old-pw', source: 'Chrome (Default)', importedAt: '2026-01-01T00:00:00.000Z', defaultForAccounts: ['vercel::team-a'] },
+        { id: 'keep-id-beta', accountKey: 'netlify::site', host: 'app.netlify.com', url: 'https://app.netlify.com/login', username: 'own@example.com', password: 'own-pw', source: 'saved in app', importedAt: '2026-01-02T00:00:00.000Z', defaultForAccounts: ['netlify::site'] },
+      ];
+      // rebuild the OLD format exactly: one safeStorage blob under `ct`, no `v`, no sidecar
+      fs.rmSync(keyFile, { force: true });
+      fs.writeFileSync(storeFile, JSON.stringify({ ct: safeStorage.encryptString(JSON.stringify(v1List)).toString('base64'), count: 2, savedAt: '2026-01-03T00:00:00.000Z' }, null, 2));
+      const migrated = creds.loadAll();
+      const after = (() => { try { return readStore(); } catch { return {}; } })();
+      const byId = new Map(migrated.map(c => [c.id, c]));
+      check('store-v2-migration',
+        migrated.length === 2 && after.v === 2 && !!after.tag && !!after.iv
+          && fs.existsSync(keyFile)
+          && byId.get('keep-id-alpha') && byId.get('keep-id-alpha').password === 'old-pw'
+          && byId.get('keep-id-alpha').defaultForAccounts.join() === 'vercel::team-a'
+          && byId.get('keep-id-beta') && byId.get('keep-id-beta').accountKey === 'netlify::site'
+          && byId.get('keep-id-beta').defaultForAccounts.join() === 'netlify::site',
+        `rows=${migrated.length} format=v${after.v} ids=${migrated.map(c => c.id).join(',')} defaults=${migrated.map(c => c.defaultForAccounts.join('|')).join(',')}`);
+      // ...and a SECOND read (the next launch's shape) still sees them, now from v2 alone
+      check('store-v2-migration-survives-a-reload',
+        creds.loadAll().length === 2 && creds.stats().total === 2, `${creds.loadAll().length} rows on re-read`);
+    }
+
+    // (4) an UNREADABLE v1 store: the broken case the owner hit. Simulated with a wrong-key v1 blob
+    // (a real safeStorage ciphertext from another key cannot be produced honestly here). The file must
+    // be left byte-identical, the app must show ONE honest notice, and an import must still work and
+    // switch the store to v2 (with the old bytes preserved under their own name).
+    {
+      const wrongKeyBlob = crypto.randomBytes(96).toString('base64'); // not a DPAPI blob at all
+      const v1Unreadable = JSON.stringify({ ct: wrongKeyBlob, count: 7, savedAt: '2026-01-04T00:00:00.000Z' }, null, 2);
+      fs.rmSync(keyFile, { force: true });
+      fs.writeFileSync(storeFile, v1Unreadable);
+      const state = creds.storeState(); // exactly what the renderer's notice asks for
+      const stillV1 = fs.readFileSync(storeFile, 'utf8');
+      check('store-v1-unreadable-shows-the-honest-notice',
+        state.legacyUnreadable === true && !!state.notice
+          && /could not be read on this machine/.test(state.notice)
+          && /re-import once and they will survive every future restart/.test(state.notice)
+          && stillV1 === v1Unreadable,
+        `legacyUnreadable=${state.legacyUnreadable} file-untouched=${stillV1 === v1Unreadable} notice="${String(state.notice).slice(0, 60)}…"`);
+      // a re-import (the owner's one-time action, Q4) seeds v2 and clears the notice by itself
+      const csvRe = path.join(app.getPath('temp'), `mam-creds-reimport-${process.pid}.csv`);
+      fs.writeFileSync(csvRe, 'url,username,password\nhttps://vercel.com/login,reimport@example.com,reimport-pw\n');
+      try { creds.importFromCsv(csvRe); } finally { try { fs.rmSync(csvRe, { force: true }); } catch {} }
+      const afterReimport = creds.storeState();
+      check('store-v1-unreadable-clears-after-a-reimport',
+        afterReimport.legacyUnreadable === false && afterReimport.notice === null
+          && creds.stats().total === 1 && readStore().v === 2
+          && fs.existsSync(path.join(app.getPath('userData'), 'credentials.v1-unreadable.json')),
+        `notice=${afterReimport.notice} rows=${creds.stats().total} format=v${readStore().v} backup=${fs.existsSync(path.join(app.getPath('userData'), 'credentials.v1-unreadable.json'))}`);
+    }
+
+    // (5) THE regression proof: two REAL launches on ONE scratch profile. Launch A seeds a login and
+    // exits; launch B — a different process, with nothing shared but the profile dir — must list it.
+    // With the 0.12.x DPAPI store this is exactly the owner's bug (B reads 0 rows); with v2 it passes.
+    {
+      fs.rmSync(keyFile, { force: true });
+      fs.rmSync(storeFile, { force: true });
+      fs.rmSync(path.join(app.getPath('userData'), 'credentials.v1-unreadable.json'), { force: true });
+      fs.rmSync(path.join(app.getPath('userData'), 'cross-process-seed.json'), { force: true });
+      fs.rmSync(path.join(app.getPath('userData'), 'cross-process-read.json'), { force: true });
+      const run = args => new Promise(resolve => {
+        // The same Electron binary and the same app path as this run (app.getAppPath() = the project
+        // root in a source run); only the profile is shared, on purpose.
+        const child = spawn(process.execPath, [app.getAppPath(), ...args], {
+          env: { ...process.env, MAM_USER_DATA: app.getPath('userData') },
+          windowsHide: true,
+        });
+        let stdout = ''; let stderr = '';
+        child.stdout.on('data', d => { stdout += d; });
+        child.stderr.on('data', d => { stderr += d; });
+        const timer = setTimeout(() => { try { child.kill(); } catch {} resolve({ timedOut: true, stdout, stderr, code: null }); }, 90000);
+        child.on('exit', code => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
+      });
+      // Read the child's RESULT FILE, not its stdout/exit code: Electron here sometimes exits with
+      // 0xC0000005 from its own teardown after the work finished (measured: the same one-shot child
+      // exits 0 six times in a row on its own, then 0xC0000005 under a parent-only run), so the file
+      // the child wrote is the only honest evidence of what it actually did.
+      const readResult = mode => {
+        try { return JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), `cross-process-${mode}.json`), 'utf8')); } catch { return null; }
+      };
+      // The single-instance lock is scoped to userData (proved on this machine 2026-11-03): while THIS
+      // process holds it, a child on the same profile would exit 3. Release it for the two launches.
+      app.releaseSingleInstanceLock();
+      const seedRun = await run(['--cross-process-seed']);
+      const seeded = readResult('seed');
+      const readRun = await run(['--cross-process-read']);
+      const readBack = readResult('read');
+      check('store-survives-restart',
+        !!seeded && seeded.ok === true && !!readBack && readBack.ok === true
+          && readBack.found === 1 && readBack.passwordMatches === true && readBack.total === 1,
+        `launch1=${JSON.stringify(seeded)} launch2=${JSON.stringify(readBack)}`
+          + ` codes=${seedRun.code}/${readRun.code}`);
+      // Both runs are genuinely separate processes: the child proves it by its own pid, and the
+      // parent's pid is different from both. (The lock probe in the run output is extra evidence.)
+      check('store-survives-restart-that-is-really-two-processes',
+        !!seeded && !!readBack && seeded.pid !== process.pid && readBack.pid !== process.pid
+          && seeded.pid !== readBack.pid
+          && String(readRun.stdout).includes('[cross-process]'),
+        `parent pid ${process.pid}; launch1 pid ${seeded && seeded.pid}; launch2 pid ${readBack && readBack.pid}`
+          + `; exit codes ${seedRun.code}/${readRun.code} (Electron teardown is not the evidence)`);
+    }
+  } catch (err) {
+    check('exception:store', false, err.message);
+  }
+
   fs.writeFileSync(path.join(__dirname, '..', 'smoke-report.json'), JSON.stringify(results, null, 2));
   app.exit(results.checks.every(c => c.ok) ? 0 : 1);
 }
-
 // ---------- smoke autofill: real page, real preload — fill AND capture ----------
 async function runSmokeAutofill() {
   const results = { mode: 'autofill', checks: [] };
@@ -2118,6 +2312,32 @@ function runInteractive(captureMode = false) {
           console.log('[capture] demo notice:', plan.kind, (plan.choices || []).length);
           await new Promise(r => setTimeout(r, 700));
         }
+        // --demo-store-notice: prove the 0.13.0 "re-import once" notice reaches the Home screen the
+        // way a user sees it — main's own storeState() → the renderer's GET of it → the banner. Point
+        // MAM_USER_DATA at a scratch profile carrying an unreadable v1 store. Screenshot aid, like
+        // --demo-notice; it changes no shipped behaviour.
+        if (process.argv.includes('--demo-store-notice')) {
+          await refreshCredStoreState();
+          const info = await win.webContents.executeJavaScript(`JSON.stringify({
+            homeVisible: !document.getElementById('home').hidden,
+            banner: (() => { const n = document.getElementById('store-notice'); return n ? n.innerText.trim().slice(0, 200) : null; })(),
+            x: (() => { const n = document.getElementById('store-notice'); if (!n) return null; const r = n.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]; })(),
+          })`).catch(err => 'probe failed: ' + err.message);
+          console.log('[capture] store notice:', info);
+          await new Promise(r => setTimeout(r, 500));
+          // --demo-store-notice-dismiss: prove the X hides it for this launch (a second read proves it
+          // stays hidden; a relaunch shows it again because the old store is still unreadable).
+          if (process.argv.includes('--demo-store-notice-dismiss')) {
+            const gone = await win.webContents.executeJavaScript(`(async () => {
+              const x = document.getElementById('store-notice-x');
+              if (x) x.click();
+              await new Promise(r => setTimeout(r, 300));
+              return JSON.stringify({ before: !!x, after: !!document.getElementById('store-notice') });
+            })()`).catch(err => 'probe failed: ' + err.message);
+            console.log('[capture] store notice dismissed:', gone);
+            await new Promise(r => setTimeout(r, 400));
+          }
+        }
         // --demo-home-marker: give two demo accounts one override each through the REAL path, so the
         // Home grid shows the "content: custom" marker the way a user would see it (0.11.0).
         if (process.argv.includes('--demo-home-marker')) {
@@ -2555,6 +2775,9 @@ function runInteractive(captureMode = false) {
     return { ok: false, reason: result.reason, message: messages[result.reason] || 'This page has no visible password field to fill.' };
   });
   ipcMain.handle('creds-stats', () => creds.stats());
+  // 0.13.0: the honest "re-import once" notice. storeState() re-reads the store, so the banner goes
+  // away by itself the moment a v2 store exists (a re-import, or a successful migration).
+  ipcMain.handle('creds-store-state', () => creds.storeState());
   // One list, two kinds: a Chromium profile and a Firefox profile are both "a browser profile with
   // saved logins", so the existing Import-from-browser window renders them side by side with no new
   // surface. `kind` is what tells the renderer which import handler to call.
@@ -2846,6 +3069,9 @@ module.exports = {
   _creds: creds,
 };
 
+// What the app needs to say about the store, surfaced to the renderer's one honest banner (0.13.0).
+function refreshCredStoreState() { return creds.storeState(); }
+
 function cycleTab(vm, dir) {
   const keys = [...vm.tabs.keys()];
   if (!keys.length) return;
@@ -2900,6 +3126,8 @@ if (!gotLock) {
       seedDemoLogins();
       if (!process.argv.includes('--capture')) return app.exit(0);
     }
+    if (process.argv.includes('--cross-process-seed')) return runCrossProcess({ seed: true });
+    if (process.argv.includes('--cross-process-read')) return runCrossProcess({ seed: false });
     if (process.argv.includes('--spike')) runSpike().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke')) runSmoke().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke-restore')) runSmokeRestore().catch(err => { console.error(err); app.exit(1); });

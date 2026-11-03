@@ -40,7 +40,7 @@
   <meta name="twitter:image" content="https://providers.danubelabs.net/og.png">
   <meta name="twitter:image:alt" content="My Provider Dash Manager — every account in one window">
 
-  <script type="application/ld+json">[{"@context":"https://schema.org","@type":"SoftwareApplication","name":"My Provider Dash Manager","alternateName":"mpdm","url":"https://providers.danubelabs.net/","description":"A free Windows desktop app that keeps many accounts per cloud and web service signed in at the same time, each in its own fully isolated Chromium session, switchable like browser tabs but built around accounts instead of pages.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Multi-account manager","operatingSystem":"Windows 10, Windows 11","softwareVersion":"0.12.1","downloadUrl":"https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest","installUrl":"https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest","codeRepository":"https://github.com/FiredMosquito831/my-provider-dash-manager","isAccessibleForFree":true,"license":"https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/LICENSE","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["Fully isolated persistent Chromium session per account","37 services built in, plus any site by URL","One window with a left account rail and per-account tabs on top","Built-in ad-blocking driven by EasyList","Dark mode powered by Dark Reader","Saved logins encrypted with Windows DPAPI and origin-bound","Import passwords from Chrome, Edge, Brave, Vivaldi, Opera, Firefox or CSV","Choose which login autofills per account","Optional read-only API tokens for live status cards","Per-account proxy support","Silent in-place auto-updates from GitHub Releases"],"screenshot":[{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/home.png","caption":"Home with the account rail and one card per account"},{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/services.png","caption":"The service picker grouped by category, the Updates panel and saved logins"},{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/navigation.png","caption":"An account tab open with back, forward, reload, dashboard and the address bar"}]},{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://providers.danubelabs.net/"},{"@type":"ListItem","position":2,"name":"Security","item":"https://providers.danubelabs.net/security.html"}]}]</script>
+  <script type="application/ld+json">[{"@context":"https://schema.org","@type":"SoftwareApplication","name":"My Provider Dash Manager","alternateName":"mpdm","url":"https://providers.danubelabs.net/","description":"A free Windows desktop app that keeps many accounts per cloud and web service signed in at the same time, each in its own fully isolated Chromium session, switchable like browser tabs but built around accounts instead of pages.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Multi-account manager","operatingSystem":"Windows 10, Windows 11","softwareVersion":"0.13.0","downloadUrl":"https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest","installUrl":"https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest","codeRepository":"https://github.com/FiredMosquito831/my-provider-dash-manager","isAccessibleForFree":true,"license":"https://github.com/FiredMosquito831/my-provider-dash-manager/blob/main/LICENSE","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["Fully isolated persistent Chromium session per account","37 services built in, plus any site by URL","One window with a left account rail and per-account tabs on top","Built-in ad-blocking driven by EasyList","Dark mode powered by Dark Reader","Saved logins encrypted with AES-256-GCM, restart-safe, and origin-bound","Import passwords from Chrome, Edge, Brave, Vivaldi, Opera, Firefox or CSV","Choose which login autofills per account","Optional read-only API tokens for live status cards","Per-account proxy support","Silent in-place auto-updates from GitHub Releases"],"screenshot":[{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/home.png","caption":"Home with the account rail and one card per account"},{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/services.png","caption":"The service picker grouped by category, the Updates panel and saved logins"},{"@type":"ImageObject","url":"https://providers.danubelabs.net/screenshots/navigation.png","caption":"An account tab open with back, forward, reload, dashboard and the address bar"}]},{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://providers.danubelabs.net/"},{"@type":"ListItem","position":2,"name":"Security","item":"https://providers.danubelabs.net/security.html"}]}]</script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -81,7 +81,7 @@
         <a href="changelog.html">Changelog</a>
       </nav>
 
-      <a class="btn btn-small btn-primary topbar-download" href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download <span class="btn-version">v0.12.1</span></a>
+      <a class="btn btn-small btn-primary topbar-download" href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download <span class="btn-version">v0.13.0</span></a>
     </div>
   </header>
 
@@ -101,7 +101,7 @@
     <div class="panel-bar"><span class="panel-label">THE SHORT VERSION</span><span class="window-dots small" aria-hidden="true"><i></i><i></i><i></i></span></div>
     <ul class="check-list check-list-good">
       <li><span class="mark" aria-hidden="true">✓</span><span>Separate Chromium session storage per account.</span></li>
-      <li><span class="mark" aria-hidden="true">✓</span><span>Saved logins and API tokens encrypted with Windows DPAPI.</span></li>
+      <li><span class="mark" aria-hidden="true">✓</span><span>Saved logins and API tokens encrypted at rest.</span></li>
       <li><span class="mark" aria-hidden="true">✓</span><span>Credentials bound to account and origin.</span></li>
       <li><span class="mark" aria-hidden="true">✓</span><span>Account pages sandboxed with context isolation.</span></li>
       <li><span class="mark" aria-hidden="true">!</span><span>DPAPI cannot stop malware running as you.</span></li>
@@ -128,7 +128,7 @@
   <div class="feature-intro">
     <p class="eyebrow">Passwords &amp; tokens</p>
     <h2>Encrypted at rest, bound to the right origin.</h2>
-    <p>Saved logins and API tokens are encrypted with Electron's <code>safeStorage</code>, which uses Windows DPAPI. They are decrypted only in the main process; the UI receives summaries and booleans, not the secrets.</p>
+    <p>Saved logins are encrypted with <strong>AES-256-GCM</strong> and API tokens with Electron's <code>safeStorage</code> (Windows DPAPI). Both are decrypted only in the main process; the UI receives summaries and booleans, not the secrets. Saved logins use their own 32-byte key file in the app's profile folder rather than DPAPI, because Windows' DPAPI key on some machines only works inside the process that wrote it — which is why a DPAPI-encrypted store could read as empty after a restart.</p>
   </div>
   <div class="split-detail">
     <ul class="check-list check-list-good">
@@ -142,9 +142,9 @@
       <h3>Storage locations</h3>
       <div class="path-row"><span>Registry, sessions, settings</span><code>%APPDATA%\multi-acc-manager</code></div>
       <div class="path-row"><span>Encrypted tokens</span><code>tokens.json</code></div>
-      <div class="path-row"><span>Encrypted saved logins</span><code>credentials.json</code></div>
+      <div class="path-row"><span>Encrypted saved logins</span><code>credentials.json + credkey</code></div>
       <div class="path-row"><span>Browser session data</span><code>persist:* partitions</code></div>
-      <p class="path-note">No plaintext password file is written. Partition cookie databases are encrypted at rest with an AES-GCM key wrapped by DPAPI.</p>
+      <p class="path-note">No plaintext password file is written. Saved logins are AES-256-GCM ciphertext; the <code>credkey</code> key file sits beside them under your Windows user account. Partition cookie databases are encrypted at rest with an AES-GCM key wrapped by DPAPI.</p>
     </div>
   </div>
 </section>
@@ -158,11 +158,11 @@
     <table class="threat-table">
       <thead><tr><th>Scenario</th><th>Protected?</th><th>Why</th></tr></thead>
       <tbody>
-        <tr><td>Another Windows user on the same PC opens your data folder</td><td><span class="pill pill-good">Yes</span></td><td>DPAPI ties the encryption key to your Windows account.</td></tr>
+        <tr><td>Another Windows user on the same PC opens your data folder</td><td><span class="pill pill-good">Yes</span></td><td>Both key schemes live under your Windows user profile, so another account cannot read them.</td></tr>
         <tr><td>A stolen disk or a copied data folder</td><td><span class="pill pill-good">Yes</span></td><td>Saved secrets and partition data are encrypted at rest.</td></tr>
         <tr><td>One account's page reads another account's session</td><td><span class="pill pill-good">No path</span></td><td>Separate persistent Chromium partitions; no shared cookie jar.</td></tr>
         <tr><td>A look-alike page tries to capture a saved password</td><td><span class="pill pill-good">Blocked</span></td><td>Capture and fill are limited to the service's own origins.</td></tr>
-        <tr><td>Malware running as your Windows user</td><td><span class="pill pill-bad">No</span></td><td>It can act as you and reach the same DPAPI-protected data. No desktop app can prevent this.</td></tr>
+        <tr><td>Malware running as your Windows user</td><td><span class="pill pill-bad">No</span></td><td>It can act as you and reach the same encrypted data and key files. No desktop app can prevent this.</td></tr>
         <tr><td>A compromised provider dashboard</td><td><span class="pill pill-bad">No</span></td><td>The app shows the service's real page; it cannot secure the service itself.</td></tr>
         <tr><td>An unsigned installer is swapped for another executable</td><td><span class="pill pill-warn">Limited</span></td><td>The CLI verifies the download is a Windows executable, but the installer is not code-signed yet.</td></tr>
       </tbody>
@@ -179,7 +179,7 @@
   <div class="detail-grid">
     <article class="detail-card"><h3>No telemetry</h3><p>The app does not send usage analytics, crash telemetry or an installation identifier to a server. Update checks go to the public GitHub release feed.</p></article>
     <article class="detail-card"><h3>No app account</h3><p>There is nothing to register for. The app does not create an identity of its own; it only hosts the identities you sign into.</p></article>
-    <article class="detail-card"><h3>No sync</h3><p>There is no multi-device sync and no cloud backup. Copying the data folder to another machine does not carry usable DPAPI secrets.</p></article>
+    <article class="detail-card"><h3>No sync</h3><p>There is no multi-device sync and no cloud backup. Copying the data folder to another machine does not carry usable DPAPI secrets, and saved logins are bound to this profile's own key file.</p></article>
     <article class="detail-card"><h3>No scraping</h3><p>The app is not a scraper and does not automate account creation. Provider status is read only when you add a token, and only through read-only API endpoints.</p></article>
   </div>
 </section>
@@ -266,7 +266,7 @@
           <h2 class="footer-heading">Resources</h2>
           <a href="faq.html">FAQ</a>
           <a href="changelog.html">Changelog</a>
-          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download v0.12.1</a>
+          <a href="https://github.com/FiredMosquito831/my-provider-dash-manager/releases/latest">Download v0.13.0</a>
           <a href="https://www.npmjs.com/package/my-provider-dash-manager">npm package</a>
         </div>
         <div>

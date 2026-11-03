@@ -380,7 +380,7 @@ def software_jsonld(version: str, service_count: int) -> dict:
             "One window with a left account rail and per-account tabs on top",
             "Built-in ad-blocking driven by EasyList",
             "Dark mode powered by Dark Reader",
-            "Saved logins encrypted with Windows DPAPI and origin-bound",
+            "Saved logins encrypted with AES-256-GCM, restart-safe, and origin-bound",
             "Import passwords from Chrome, Edge, Brave, Vivaldi, Opera, Firefox or CSV",
             "Choose which login autofills per account",
             "Optional read-only API tokens for live status cards",

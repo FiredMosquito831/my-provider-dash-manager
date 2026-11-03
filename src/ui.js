@@ -3,6 +3,11 @@ let registry = [];
 let state = { activeKey: null, warmLimit: 5, tabs: [], groupTabs: false, collapsed: [] };
 let filterText = '';
 let credStats = null;
+// 0.13.0: the honest notice about an old-format saved-login store that this machine cannot read.
+// Main owns the fact (it re-reads the store each time); the renderer only draws it and remembers a
+// dismissal FOR THIS LAUNCH, so it returns at the next start while the old store is still there.
+let credStoreState = { notice: null, error: null };
+let storeNoticeDismissed = false;
 let updateState = { status: 'idle', currentVersion: '' };
 
 const $tabctl = document.getElementById('tabctl');
@@ -443,11 +448,12 @@ function renderHome() {
         </div>
       </div>`;
     }).join('')}
+    ${storeNoticeHtml()}
     ${pickerHtml('data-add2')}
     ${updatePanel()}
     <div class="svcgroup">
       <div class="head"><span class="name">Saved logins</span>
-        <span class="policy">${(state.credCount != null ? state.credCount : (credStats ? credStats.total : 0))} stored · encrypted with Windows DPAPI</span></div>
+        <span class="policy">${(state.credCount != null ? state.credCount : (credStats ? credStats.total : 0))} stored · encrypted with AES-256-GCM, survives restarts</span></div>
       <div class="sub" style="margin-bottom:0">
         <button class="ctlbtn ${st.saveLogins ? 'on' : ''}" id="t-saveLogins" title="Remember logins you type in account tabs">${icon('key')} Remember logins</button>
         <button class="ctlbtn ${st.autofill ? 'on' : ''}" id="t-autofill" title="Fill the saved login automatically when a sign-in page appears">${icon('play')} Auto-fill</button>
@@ -459,6 +465,42 @@ function renderHome() {
   restoreHomeFocus(keepValue); // re-renders no longer kick you out of the warm-limit field
   $home.scrollTop = keepScroll;
 }
+
+// The one honest notice about the saved-login store (0.13.0). It is drawn ONLY when main reports it:
+// either an old-format store this machine cannot read (re-import once — D35), or a current store that
+// failed its integrity check. Dismissing it hides it for this launch only; it returns at the next
+// start while the condition is still true, so it can never silently disappear and look like "fine".
+function storeNoticeHtml() {
+  const n = credStoreState || {};
+  if (n.notice && !storeNoticeDismissed) {
+    return `<div class="storenotice" id="store-notice" role="status">
+      <span class="ic">${icon('key')}</span>
+      <span class="msg">${esc(n.notice)}</span>
+      <span class="acts"><button class="btn-plain" id="store-notice-x" title="Hide until the next start">${icon('x')}</button></span>
+    </div>`;
+  }
+  if (n.error && !storeNoticeDismissed) {
+    return `<div class="storenotice bad" id="store-notice" role="alert">
+      <span class="ic">${icon('key')}</span>
+      <span class="msg">Saved logins could not be read: ${esc(n.error.message)}. The file was left untouched.</span>
+      <span class="acts"><button class="btn-plain" id="store-notice-x" title="Hide until the next start">${icon('x')}</button></span>
+    </div>`;
+  }
+  return '';
+}
+
+function refreshCredStoreState() {
+  return window.api.credsStoreState().then(s => { credStoreState = s || { notice: null, error: null }; }).catch(() => {});
+}
+
+// After anything that can change the store's FORMAT (an import re-encrypts to v2, Clear removes it),
+// re-read both numbers and the notice together, so the honest banner disappears the moment a
+// re-import has seeded the new store — and never before.
+async function refreshCreds() {
+  credStats = await window.api.credsStats().catch(() => credStats);
+  await refreshCredStoreState();
+}
+
 
 // Chips for every service that has no presence yet, grouped by category. `attr` is the data attribute
 // the click handler listens for. `all` lists every service (the modal picker), `q` filters by name.
@@ -593,6 +635,8 @@ $home.addEventListener('change', async e => {
 });
 
 $home.addEventListener('click', async e => {
+  const noticeX = e.target.closest('#store-notice-x');
+  if (noticeX) { storeNoticeDismissed = true; renderHome(); return; }
   const refresh = e.target.closest('#refresh-status');
   if (refresh) { refresh.disabled = true; await window.api.refreshAllStatus().catch(() => {}); refresh.disabled = false; return; }
   const autoBtn = e.target.closest('#t-autoUpdate');
@@ -619,7 +663,7 @@ $home.addEventListener('click', async e => {
   if (e.target.closest('#imp-csv')) {
     try {
       const r = await window.api.credsImportCsv();
-      if (r) { credStats = await window.api.credsStats(); renderHome(); alert(`Imported ${r.added} new logins${r.updated ? `, updated ${r.updated}` : ''} (${r.found} found, ${credStats.total} stored).`); }
+      if (r) { await refreshCreds(); renderHome(); alert(`Imported ${r.added} new logins${r.updated ? `, updated ${r.updated}` : ''} (${r.found} found, ${credStats ? credStats.total : 0} stored).`); }
     } catch (err) { alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); }
     return;
   }
@@ -627,7 +671,7 @@ $home.addEventListener('click', async e => {
   if (e.target.closest('#imp-clear')) {
     if (confirm('Delete every stored login? Sessions stay signed in; only saved passwords are removed.')) {
       await window.api.credsClear();
-      credStats = await window.api.credsStats();
+      await refreshCreds();
       renderHome();
     }
     return;
@@ -710,7 +754,7 @@ async function openImportModal() {
         const r = b.kind === 'firefox'
           ? await window.api.credsImportFirefox(b.id)
           : await window.api.credsImportBrowser(b.id);
-        credStats = await window.api.credsStats();
+        await refreshCreds();
         // A refused profile (master password / old format / damaged) is a result, not a crash: say
         // exactly what is wrong and what to do instead, and never look like a successful empty import.
         if (r.refused) {
@@ -1165,7 +1209,7 @@ function openCredsManagerModal() {
         try {
           const r = await window.api.credsDelete(b.getAttribute('data-cred-del'));
           list = r.rows || [];
-          credStats = await window.api.credsStats();
+          await refreshCreds();
           renderHome();
           render();
         } catch (err) { box.style.color = 'var(--danger)'; box.textContent = errText(err); }
@@ -1258,6 +1302,7 @@ window.api.onTabsState(s => {
   state.collapsed = (settings && settings.collapsed) || [];
   state.stripCollapsed = (settings && settings.stripCollapsed) || [];
   credStats = await window.api.credsStats().catch(() => null);
+  credStoreState = await window.api.credsStoreState().catch(() => ({ notice: null, error: null }));
   updateState = await window.api.updateState().catch(() => ({ status: 'idle', currentVersion: '' }));
   renderAll();
   window.api.uiReady(); // triggers session restore in main

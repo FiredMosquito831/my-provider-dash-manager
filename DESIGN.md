@@ -37,10 +37,12 @@ service, one tab per account, instant switching, and sessions that persist acros
   can never cover the chrome. Views get a synchronous background colour and visibility-driven switching
   to pre-empt Electron paint-order bugs (#43293/#47351); no draggable-region overlays (#43320).
 - **Security model (honest)**: partition cookie DBs are AES-GCM encrypted at rest with a DPAPI-wrapped key
-  (protects against other users / stolen disk, NOT same-user malware); app secrets go through
-  `safeStorage` (async, Electron 42+); no cloud sync of partitions; encrypted-ciphertext-only export when
-  it ships; per-account "clear all site data" = `clearStorageData`. Security page in-app will state the
-  threat model plainly.
+  (protects against other users / stolen disk, NOT same-user malware); API tokens go through
+  `safeStorage` (async, Electron 42+); saved logins use AES-256-GCM with a 32-byte `credkey` sidecar in
+  the profile folder, because DPAPI's key is per-process on some machines and a DPAPI store therefore
+  read as empty after a restart (D35, 0.13.0). No cloud sync of partitions; encrypted-ciphertext-only
+  export when it ships; per-account "clear all site data" = `clearStorageData`. Security page in-app
+  will state the threat model plainly.
 - **Engine fallback**: WebView2 named profiles (one UDF, N profiles, one browser process) is the verified
   Windows fast path if Electron memory proves unacceptable — decide after the memory spike, not before.
 - **Watchlist**: tauri#9285 (stable Tauri multiwebview), Electron #24573 (passkey umbrella), Chromium 2-week
@@ -73,7 +75,7 @@ Per-service facts that shaped the design:
 | `src/services.js` | The 37 curated built-in services: URLs, colour, category, multi-account policy, optional extra auth hosts trusted by the credential guard, token hint |
 | `src/providers.js` | Read-only API status fetchers per built-in service |
 | `src/api-tokens.js` | DPAPI-encrypted token store (`safeStorage`), validated before storing |
-| `src/credentials.js` | Saved logins: encrypted store, Chromium/CSV import, per-account + per-origin recall |
+| `src/credentials.js` | Saved logins: AES-256-GCM store + `credkey` sidecar (v1 migration), Chromium/CSV/Firefox import, per-account + per-origin recall |
 | `src/content.js` | EasyList ad-blocking (per-partition `webRequest`) and cosmetic CSS |
 | `src/darkmode.js` | Dark mode: Dark Reader's npm API build, evaluated in each account view's isolated world (world 999) |
 | `vendor/darkreader/` | Vendored Dark Reader 4.9.133 API build (355 KB UMD, MIT) — the engine `src/darkmode.js` injects |
