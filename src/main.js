@@ -1398,6 +1398,130 @@ async function runSmokeCreds() {
   } finally {
     try { fs.rmSync(csv, { force: true }); } catch {}
   }
+
+  // ---------- 0.12.0: direct Firefox import ----------
+  // Every fixture here is built from published test constants by scripts/firefox-fixture.js. The
+  // import is NEVER pointed at the real %APPDATA%\Mozilla\Firefox profile: the profile LIST is
+  // redirected with MAM_FIREFOX_ROOT and every read uses an explicit synthetic folder.
+  try {
+    const { build: buildFixture, KNOWN_WEB } = require('../scripts/firefox-fixture.js');
+    // The suite owns the whole temp dir and asserts it holds nothing but fixture INPUTS afterwards:
+    // a written decrypt is the one way this path could hand plaintext to disk.
+    const ffTmp = path.join(app.getPath('temp'), `mam-ff-${process.pid}`);
+    fs.rmSync(ffTmp, { recursive: true, force: true });
+    fs.mkdirSync(ffTmp, { recursive: true });
+    try {
+    const profilesRoot = path.join(ffTmp, 'ffroot');
+    const profileDir = path.join(profilesRoot, 'Profiles', 'synthetic.default-release');
+    buildFixture(profileDir);
+    // A second profile with only key4.db, and the UTF-16LE-BOM profiles.ini Firefox really writes.
+    const key4OnlyDir = path.join(profilesRoot, 'Profiles', 'empty.default');
+    fs.mkdirSync(key4OnlyDir, { recursive: true });
+    fs.copyFileSync(path.join(profileDir, 'key4.db'), path.join(key4OnlyDir, 'key4.db'));
+    const iniText = '[General]\r\nStartWithLastProfile=1\r\nVersion=2\r\n\r\n'
+      + '[Profile0]\r\nName=synthetic\r\nIsRelative=1\r\nPath=Profiles/synthetic.default-release\r\nDefault=1\r\n\r\n'
+      + '[Profile1]\r\nName=empty\r\nIsRelative=1\r\nPath=Profiles/empty.default\r\n';
+    fs.writeFileSync(path.join(profilesRoot, 'profiles.ini'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(iniText, 'utf16le')]));
+
+    process.env.MAM_FIREFOX_ROOT = profilesRoot;
+    let listed = [];
+    try { listed = creds.listFirefoxProfiles(); } finally { delete process.env.MAM_FIREFOX_ROOT; }
+
+    // (1) the profile list and the synthetic round trip in one check: the UTF-16LE profiles.ini is
+    // read correctly, a key4.db-only profile does NOT appear as importable, and the import recovers
+    // exactly the known rows with Unicode and embedded commas intact. The blank-username row and the
+    // chrome:// row are both skipped and both counted.
+    const profile = { browser: 'Firefox', profile: 'synthetic.default-release', profileDir };
+    const r1 = creds.importFromFirefox(profile);
+    const all = creds.loadAll().filter(c => String(c.source).startsWith('Firefox:'));
+    const want = new Map(KNOWN_WEB.map(k => [creds.hostOf(k.hostname), k]));
+    check('firefox-synthetic-import',
+      listed.length === 1 && listed[0].browser === 'Firefox'
+        && listed[0].profile === 'synthetic.default-release' && listed[0].profileDir === path.resolve(profileDir)
+        && r1.refused == null && r1.added === 4 && r1.updated === 0 && r1.scanned === 6
+        && r1.skippedBlank === 1 && r1.skippedNonWeb === 1
+        && all.length === 4
+        && all.every(c => { const w = want.get(c.host); return w && w.password === c.password && w.username === c.username; })
+        && all.some(c => c.password === 'p@ss"word,with,commas')
+        && all.some(c => c.password === 'パスワード–✓' && c.username === 'üser@example.test')
+        && all.every(c => c.source === 'Firefox: synthetic.default-release' && !!c.importedAt),
+      `listed=${listed.map(p => p.profile).join(',') || 'none'} added=${r1.added} scanned=${r1.scanned} blank=${r1.skippedBlank} nonWeb=${r1.skippedNonWeb}`);
+
+    // (2) the frozen merge contract: a re-import with ONE changed password updates in place, keeps
+    // the id, and does not add a row.
+    const before = creds.loadAll().filter(c => String(c.source).startsWith('Firefox:'));
+    const targetRow = before.find(c => c.username === 'alice@example.test');
+    const targetId = targetRow.id;
+    // Rebuild the fixture, changing only alice's password, then re-import the same profile label.
+    buildFixture(profileDir, { passwordOverrides: { 'alice@example.test': 'S3cret-Beta2!' } });
+    const r2 = creds.importFromFirefox(profile);
+    const afterRows = creds.loadAll().filter(c => String(c.source).startsWith('Firefox:'));
+    const aliceAfter = afterRows.find(c => c.username === 'alice@example.test');
+    check('firefox-in-place-merge',
+      r2.updated === 1 && r2.added === 0 && aliceAfter && aliceAfter.id === targetId
+        && aliceAfter.password === 'S3cret-Beta2!' && afterRows.length === 4,
+      `added=${r2.added} updated=${r2.updated} id-same=${!!aliceAfter && aliceAfter.id === targetId}`);
+
+    // (3) at rest: the raw store must not contain any fixture password (it is DPAPI-encrypted).
+    const rawStore = fs.readFileSync(path.join(app.getPath('userData'), 'credentials.json'), 'utf8');
+    const secrets = [...KNOWN_WEB.map(k => k.password), 'S3cret-Beta2!', 'only-password', 'not-a-web-login'];
+    check('firefox-encrypted-at-rest',
+      secrets.every(s => !rawStore.includes(s)) && rawStore.includes('"ct"'),
+      `${secrets.length} fixture secrets absent; store is ${rawStore.length} B of ciphertext`);
+
+    // (4) refusal 1: an empty folder — honest error, zero rows added.
+    const emptyDir = path.join(ffTmp, 'empty-profile');
+    fs.mkdirSync(emptyDir, { recursive: true });
+    const countBefore = creds.stats().total;
+    const r3 = creds.importFromFirefox({ browser: 'Firefox', profile: 'empty-profile', profileDir: emptyDir });
+    check('firefox-refused-missing-profile',
+      r3.added === 0 && r3.refused === 'FIREFOX_NO_KEY4' && /key4\.db/.test(r3.note || '')
+        && creds.stats().total === countBefore,
+      `refused=${r3.refused} added=${r3.added} "${String(r3.note).slice(0, 70)}"`);
+
+    // (5) refusal 2: a flipped ciphertext byte in key4.db — honest error, zero rows added.
+    const corruptDir = path.join(ffTmp, 'corrupt-profile');
+    fs.mkdirSync(corruptDir, { recursive: true });
+    buildFixture(corruptDir);
+    {
+      const { DatabaseSync } = require('node:sqlite');
+      const db = new DatabaseSync(path.join(corruptDir, 'key4.db'));
+      const meta = db.prepare("SELECT item2 FROM metaData WHERE id='password'").get();
+      const blob = Buffer.from(meta.item2);
+      blob[blob.length - 1] ^= 0xff; // one byte of the password-check ciphertext
+      db.prepare("UPDATE metaData SET item2=? WHERE id='password'").run(blob);
+      db.close();
+    }
+    const countBefore2 = creds.stats().total;
+    const r4 = creds.importFromFirefox({ browser: 'Firefox', profile: 'corrupt-profile', profileDir: corruptDir });
+    check('firefox-refused-corrupt-fixture',
+      r4.added === 0 && r4.refused === 'FIREFOX_MASTER_PASSWORD' && /master password|damaged/.test(r4.note || '')
+        && creds.stats().total === countBefore2,
+      `refused=${r4.refused} added=${r4.added} "${String(r4.note).slice(0, 70)}"`);
+
+    // (6) non-web hosts are counted, never stored: the store holds no `chrome` host, AND the import
+    // left nothing plaintext in the temp dir — every file there is a fixture input, and its only
+    // output is the DPAPI-encrypted store.
+    const storedRows = creds.loadAll().filter(c => String(c.source).startsWith('Firefox:'));
+    const leftFiles = [];
+    const walk = dir => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const f = path.join(dir, e.name);
+      if (e.isDirectory()) walk(f); else leftFiles.push(path.relative(ffTmp, f));
+    } };
+    walk(ffTmp);
+    const nonFixture = leftFiles.filter(f => !/(^|[\\/])(key4\.db|logins\.json|profiles\.ini)$/.test(f));
+    check('firefox-skips-non-web-hosts',
+      r1.skippedNonWeb === 1
+        && !storedRows.some(c => c.host === 'chrome' || c.host === 'chrome://settings')
+        && !creds.listCredentials().some(c => c.host === 'chrome')
+        && storedRows.every(c => /^[a-z0-9.-]+$/.test(c.host) && !c.host.includes(':'))
+        && nonFixture.length === 0,
+      `skippedNonWeb=${r1.skippedNonWeb}; hosts=${storedRows.map(c => c.host).join(',')}; temp=${leftFiles.length} files all fixture inputs${nonFixture.length ? ` (unexpected: ${nonFixture.join(',')})` : ''}`);
+    } finally { fs.rmSync(ffTmp, { recursive: true, force: true }); }
+  } catch (err) {
+    check('exception:firefox', false, err.message);
+  }
+
   fs.writeFileSync(path.join(__dirname, '..', 'smoke-report.json'), JSON.stringify(results, null, 2));
   app.exit(results.checks.every(c => c.ok) ? 0 : 1);
 }
@@ -2010,6 +2134,23 @@ function runInteractive(captureMode = false) {
           console.log('[capture] home markers:', info);
           await new Promise(r => setTimeout(r, 300));
         }
+        // --demo-import: open the Import-from-browser window through the RENDERER's own click
+        // handler, so the screenshot shows the real modal with whatever profile rows exist. Point
+        // MAM_FIREFOX_ROOT at a synthetic root first and the Firefox row is the fixture, never the
+        // owner's live profile. Screenshot aid for a scratch demo profile, like --demo-picker.
+        if (process.argv.includes('--demo-import')) {
+          await new Promise(r => setTimeout(r, 600));
+          if (win.webContents && !win.webContents.isDestroyed()) {
+            await win.webContents.executeJavaScript('document.getElementById("imp-browser").click()').catch(err => console.error('[capture] import click failed:', err.message));
+          }
+          await new Promise(r => setTimeout(r, 1200));
+          const info = await win.webContents.executeJavaScript(`JSON.stringify({
+            modalOpen: !document.getElementById('modal-back').hidden,
+            rows: [...document.querySelectorAll('#modal [data-imp]')].map(b => b.innerText.trim()),
+            note: (() => { const n = [...document.querySelectorAll('#modal .note')].find(x => /master password/.test(x.textContent)); return n ? n.textContent.trim().slice(0, 90) : ''; })(),
+          })`).catch(err => 'probe failed: ' + err.message);
+          console.log('[capture] demo import:', info);
+        }
         // --demo-content: give the account in --capture-open one override through the REAL path, then
         // open its gear window from the RENDERER, so the screenshot shows the real three-way selects,
         // the worded resolved state and the honest note (0.11.0). Drives state from main, never from
@@ -2414,11 +2555,27 @@ function runInteractive(captureMode = false) {
     return { ok: false, reason: result.reason, message: messages[result.reason] || 'This page has no visible password field to fill.' };
   });
   ipcMain.handle('creds-stats', () => creds.stats());
-  ipcMain.handle('creds-browsers', () => creds.listChromiumProfiles().map(p => ({ browser: p.browser, profile: p.profile, id: p.loginData })));
+  // One list, two kinds: a Chromium profile and a Firefox profile are both "a browser profile with
+  // saved logins", so the existing Import-from-browser window renders them side by side with no new
+  // surface. `kind` is what tells the renderer which import handler to call.
+  ipcMain.handle('creds-browsers', () => [
+    ...creds.listChromiumProfiles().map(p => ({ browser: p.browser, profile: p.profile, id: p.loginData, kind: 'chromium' })),
+    ...creds.listFirefoxProfiles().map(p => ({ browser: p.browser, profile: p.profile, id: p.profileDir, kind: 'firefox' })),
+  ]);
   ipcMain.handle('creds-import-browser', async (_e, id) => {
     const p = creds.listChromiumProfiles().find(x => x.loginData === id);
     if (!p) throw new Error('Browser profile not found');
     const r = await creds.importFromChromium(p);
+    vm.emitState();
+    return r;
+  });
+  // Firefox: refuses a master-password-protected or old-format profile with a specific message and
+  // imports nothing. A refusal is a normal result here, not an exception, so the window can show it.
+  ipcMain.handle('creds-import-firefox', (_e, profileDir) => {
+    const p = creds.listFirefoxProfiles().find(x => x.profileDir === profileDir)
+      || (profileDir ? { browser: 'Firefox', profile: path.basename(String(profileDir)), profileDir } : null);
+    if (!p) throw new Error('Firefox profile not found');
+    const r = creds.importFromFirefox(p);
     vm.emitState();
     return r;
   });

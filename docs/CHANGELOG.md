@@ -2,6 +2,43 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.12.0 — 2026-11-03
+
+### Added
+- **Firefox passwords import directly — no CSV export needed.** The **Import from browser** window now
+  lists every installed Firefox profile that has saved logins, right alongside the Chrome, Edge,
+  Brave, Vivaldi and Opera rows, and imports it in one click. Nothing new to open: it is the same
+  window, one more kind of row.
+- **The Firefox reader runs entirely in the app.** Firefox's key database is decrypted with the
+  primitives Node already ships, so there is no new dependency, no external `openssl` call and no
+  change to the installer. The profile is opened read-only and nothing is ever written back to it.
+- **Skipped rows are counted, never silently dropped.** Two kinds of saved login can't become a
+  usable entry: ones with no username (nothing to fill), and ones saved for a non-web page such as
+  `chrome://settings` (a host that could never match a real site). Both are counted and the result
+  line says how many.
+
+### Changed
+- **D12 corrected: modern Firefox is AES, not the old 3DES work.** The backlog assumed Firefox's NSS
+  needed ASN.1/3DES effort with little payoff. On Firefox 63 and later the profile is PBES2 —
+  PBKDF2-HMAC-SHA256 with AES-256-CBC — and the only unusual details are that Firefox stores a
+  14-byte IV (rebuilt as `04 0e || <iv>`) and feeds `SHA1(globalSalt || password)` to PBKDF2. That
+  made a small, dependency-free reader practical, which is what shipped here.
+- **The import window's note no longer says Firefox is CSV-only.** It now states what actually
+  happens: Firefox profiles are read directly, with the two exceptions below.
+
+### Known limitations
+- **A profile with a master password is refused, not prompted for.** The window says so plainly
+  ("this Firefox profile has a master password set — export CSV from Firefox instead") and imports
+  nothing. Asking for the password would mean a new prompt and a new failure surface; almost no
+  profile sets one. **Named gap:** the refusal is proven, the prompt path does not exist in 0.12.0.
+- **Firefox 62 and earlier (the old key format) is a hard refusal**, with the same "export CSV from
+  Firefox" advice. The old generation cannot be tested here, so it is not decoded rather than
+  silently skipped — a silent skip would read as data loss.
+- A profile whose key database is damaged fails with an honest "master password or damaged" message
+  rather than importing zero rows and looking successful.
+
+Suite grows 173 → 179 checks: `smoke:creds` 50 → 56.
+
 ## 0.11.0 — 2026-11-03
 
 ### Added

@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('api', {
   credsStats: () => ipcRenderer.invoke('creds-stats'),
   credsBrowsers: () => ipcRenderer.invoke('creds-browsers'),
   credsImportBrowser: id => ipcRenderer.invoke('creds-import-browser', id),
+  credsImportFirefox: profileDir => ipcRenderer.invoke('creds-import-firefox', profileDir),
   credsImportCsv: () => ipcRenderer.invoke('creds-import-csv'),
   credsClear: () => ipcRenderer.invoke('creds-clear'),
   credsForAccount: (svc, id) => ipcRenderer.invoke('creds-for-account', svc, id),

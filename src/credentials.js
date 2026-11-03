@@ -5,7 +5,10 @@
 //      "Login Data" SQLite and decrypts with the DPAPI-wrapped AES key from "Local State".
 //      Chrome 127+ can wrap that key with app-bound encryption (v20); those entries are NOT
 //      decryptable from another process by design — we detect and report that honestly.
-//   2. CSV import: every browser (including Firefox) can export passwords to CSV. Always works.
+//   2. Firefox direct import (0.12.0): reads a profile's key4.db + logins.json and decrypts them in
+//      pure Node (PBES2 = PBKDF2-HMAC-SHA256 + AES-256-CBC; see firefox-import.js). A profile with
+//      a master password, or the pre-63 key format, is refused with a specific message.
+//   3. CSV import: every browser (including Firefox) can export passwords to CSV. Always works.
 //
 // Stored credentials are encrypted at rest with safeStorage (DPAPI on Windows), like API tokens.
 const { app, safeStorage } = require('electron');
@@ -14,6 +17,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { DatabaseSync } = require('node:sqlite');
+const firefoxImport = require('./firefox-import');
 
 function credsFile() { return path.join(app.getPath('userData'), 'credentials.json'); }
 
@@ -189,6 +193,55 @@ async function importFromChromium(profile) {
     note: locked
       ? `${locked} entries use app-bound encryption (Chrome 127+) and cannot be read by another app — export those to CSV from the browser and import the file instead.`
       : (keyError ? `Could not unwrap the browser key: ${keyError}` : null),
+  };
+}
+
+// ---------- Firefox (key4.db + logins.json, decrypted in pure Node) ----------
+// Modern Firefox (63+) does not use the ASN.1/3DES scheme D12 assumed: it is PBES2 —
+// PBKDF2-HMAC-SHA256 + AES-256-CBC — and the only unusual parts are the 14-byte stored IV
+// (rebuilt as `04 0e || iv`) and the SHA1(globalSalt || password) PBKDF2 input. The reader lives in
+// firefox-import.js; this is the product seam around it.
+function listFirefoxProfiles() {
+  try { return firefoxImport.listFirefoxProfiles(); } catch { return []; }
+}
+
+function importFromFirefox(profile) {
+  let read;
+  try {
+    read = firefoxImport.readFirefoxLogins(profile.profileDir);
+  } catch (err) {
+    // A refusal is the point, not a crash: the profile is master-password protected, corrupt or an
+    // old-format profile. Report the specific reason and import NOTHING.
+    return {
+      added: 0, updated: 0, total: loadAll().length,
+      found: 0, locked: 0, failed: 0, keyError: null,
+      scanned: 0, skippedBlank: 0, skippedNonWeb: 0,
+      refused: err.code || 'FIREFOX_ERROR',
+      note: err.message,
+    };
+  }
+  const label = profile.profile || path.basename(profile.profileDir || '');
+  const importedAt = new Date().toISOString();
+  const creds = read.logins.map(l => ({
+    host: l.host, url: l.url, username: l.username, password: l.password,
+    source: `Firefox: ${label}`, importedAt,
+  }));
+  const result = mergeCredentials(creds);
+  const parts = [];
+  if (read.skippedNonWeb) parts.push(`${read.skippedNonWeb} saved login${read.skippedNonWeb === 1 ? '' : 's'} for non-web pages (chrome:// or similar) skipped`);
+  if (read.skippedBlank) parts.push(`${read.skippedBlank} without a username skipped`);
+  if (read.failed) parts.push(`${read.failed} could not be decrypted`);
+  return {
+    ...result,
+    found: read.logins.length,
+    locked: 0,
+    failed: read.failed,
+    keyError: null,
+    scanned: read.scanned,
+    skippedBlank: read.skippedBlank,
+    skippedNonWeb: read.skippedNonWeb,
+    refused: null,
+    note: parts.length ? parts.join('; ') + '.' : null,
   };
 }
 
@@ -422,6 +475,7 @@ function clearAll() { try { fs.rmSync(credsFile(), { force: true }); } catch {} 
 
 module.exports = {
   listChromiumProfiles, importFromChromium, importFromCsv,
+  listFirefoxProfiles, importFromFirefox,
   matchesFor, fillInto, stats, clearAll, loadAll, listCredentials,
   rememberForAccount, forAccount, candidatesForAccount, candidateSummariesForAccount, credentialForAccount, credentialFor,
   setDefaultForAccount, deleteCredential, hostOf, hostRelated, removeForAccount,

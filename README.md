@@ -218,7 +218,11 @@ works in the app. Anything else can be added by URL or as a plugin.
   refused, and a fill that cannot happen now says why instead of failing quietly.
 - **Re-importing updates changed passwords** instead of silently keeping the old one.
 - **Imports existing passwords** from installed Chromium browsers (Chrome, Edge, Brave, Vivaldi,
-  Opera) or from a CSV exported by any browser, including Firefox.
+  Opera) **and from Firefox profiles directly** — no CSV export first. The *Import from browser*
+  window lists every Firefox profile that has saved logins alongside the Chromium ones. A Firefox
+  profile with a **master password** set, or one from Firefox 62 or earlier, is refused with a
+  specific message instead of importing nothing quietly; both cases point you at the CSV route. A
+  CSV exported by any browser still imports too.
 - Encrypted at rest with Windows DPAPI. Passwords never reach the app's own UI process.
 - **Origin-bound**: a login is tied to the account *and* the service's own domains. A password typed on
   another site reached from that tab (an OAuth hand-off, a look-alike page) is never captured as that
@@ -377,7 +381,7 @@ npm start              # run the app
 npm run smoke          # sessions, registry, partitions, tab navigation (12 checks)
 npm run smoke:restore  # sessions survive a restart (real cookies)
 npm run smoke:tokens   # DPAPI round-trip + live fake-token rejection per provider (15)
-npm run smoke:creds    # import, per-account/manager/site lists, defaults, copy, fill fallback, auto-fill plan, encryption at rest (50)
+npm run smoke:creds    # import (CSV + direct Firefox), per-account/manager/site lists, defaults, copy, fill fallback, auto-fill plan, encryption at rest (56)
 npm run smoke:autofill # real page: form detection, fill + request ids, undo, capture, origin guard (15)
 npm run smoke:updates  # version comparison, silent-install mode, auto-update toggle, real release-feed check (11)
 npm run smoke:services # every built-in login page loads inside an isolated partition (42)
@@ -390,7 +394,7 @@ npm start -- --print-paths            # show the app name, version and data fold
 npm start -- --open vercel::personal  # open an account on launch
 ```
 
-The suite is 173 checks across eight modes. `MAM_USER_DATA=<dir>` points any command at an isolated
+The suite is 179 checks across eight modes. `MAM_USER_DATA=<dir>` points any command at an isolated
 profile.
 
 Releases are cut by pushing a `v*` tag: GitHub Actions checks the tag against `package.json`, builds

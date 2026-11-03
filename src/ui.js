@@ -692,10 +692,10 @@ async function openImportModal() {
     <h3>Import passwords from a browser</h3>
     ${list.length ? list.map((b, i) => `
       <div class="row"><button class="btn-plain" data-imp="${i}" style="text-align:left">${esc(b.browser)} — ${esc(b.profile)}</button></div>`).join('')
-      : '<div class="note">No Chrome, Edge, Brave, Vivaldi or Opera profile with saved passwords was found.</div>'}
+      : '<div class="note">No Chrome, Edge, Brave, Vivaldi, Opera or Firefox profile with saved passwords was found.</div>'}
     <div id="m-error" style="font-size:11px;margin-top:10px;line-height:1.5"></div>
     <div class="row"><button class="btn-plain" id="m-cancel">Close</button></div>
-    <div class="note">Close the browser first so its password database is readable. Chrome 127+ can lock entries with app-bound encryption — those must be exported to CSV from the browser instead (Settings → Passwords → Export). Firefox always uses the CSV path.</div>`;
+    <div class="note">Close the browser first so its password database is readable. Chrome 127+ can lock entries with app-bound encryption — those must be exported to CSV from the browser instead (Settings → Passwords → Export). Firefox profiles are read directly, but a profile with a <b>master password</b> set, or one from Firefox 62 or earlier, must be exported to CSV from Firefox instead.</div>`;
   $modal.querySelector('#m-cancel').onclick = closeModal;
   $modal.querySelectorAll('[data-imp]').forEach(btn => {
     btn.onclick = async () => {
@@ -704,10 +704,20 @@ async function openImportModal() {
       box.style.color = 'var(--muted)';
       box.textContent = 'Importing…';
       try {
-        const r = await window.api.credsImportBrowser(b.id);
+        const r = b.kind === 'firefox'
+          ? await window.api.credsImportFirefox(b.id)
+          : await window.api.credsImportBrowser(b.id);
         credStats = await window.api.credsStats();
-        box.style.color = r.added ? 'var(--ok)' : 'var(--warn)';
-        box.textContent = `${r.added} new logins imported${r.updated ? `, ${r.updated} updated` : ''} (${r.found} readable of ${r.found + r.locked + r.failed}).` + (r.note ? ` ${r.note}` : '');
+        // A refused profile (master password / old format / damaged) is a result, not a crash: say
+        // exactly what is wrong and what to do instead, and never look like a successful empty import.
+        if (r.refused) {
+          box.style.color = 'var(--danger)';
+          box.textContent = r.note || 'This profile could not be imported.';
+        } else {
+          box.style.color = r.added ? 'var(--ok)' : 'var(--warn)';
+          const scanned = r.scanned != null ? r.scanned : r.found + r.locked + r.failed;
+          box.textContent = `${r.added} new logins imported${r.updated ? `, ${r.updated} updated` : ''} (${r.found} readable of ${scanned}).` + (r.note ? ` ${r.note}` : '');
+        }
         renderHome();
       } catch (err) {
         box.style.color = 'var(--danger)';
