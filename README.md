@@ -192,11 +192,21 @@ works in the app. Anything else can be added by URL or as a plugin.
 ### Password manager with per-service import
 - **Remembers logins you type** inside an account tab, bound to *that* account, so two accounts on the
   same service refill with different credentials.
-- **Auto-fills sign-in pages** when it recognises one (toggleable), plus a manual fill action.
-- **Manage logins** from Home → Saved logins → *Manage logins…*: every stored login grouped by
-  service, with delete. No password is ever shown.
+- **See each account's logins.** Open an account's **Manage** (gear) window and its *Saved logins* list
+  shows exactly the logins that belong to it, with **Use** to make one that account's default and fill
+  it into the open tab. A small key on the rail row marks every account that has a saved login, even
+  while its tab is asleep.
+- **Auto-fills sign-in pages** when it recognises one (toggleable), and now **tells you**: a banner
+  above the page says what was filled, offers **Undo**, and asks you to choose when several logins
+  match instead of silently doing nothing. Any single account can opt out with **Never auto-fill for
+  this account** in its Manage window; the Home toggle stays the master switch.
+- **Manage logins** from Home → Saved logins → *Manage logins…*: every stored login as its own row,
+  filterable by service or by account, with set/clear default and delete. No password is ever shown.
 - **Choose which login fills:** when more than one matches a site the app asks instead of guessing,
   and your choice is remembered as that account's default (marked ★ in the manager).
+- **Fills from anywhere** on the service's own site: if the page you are on has no matching login (a
+  dashboard, say), the account's login for that service is used. Filling on any other domain is
+  refused, and a fill that cannot happen now says why instead of failing quietly.
 - **Re-importing updates changed passwords** instead of silently keeping the old one.
 - **Imports existing passwords** from installed Chromium browsers (Chrome, Edge, Brave, Vivaldi,
   Opera) or from a CSV exported by any browser, including Firefox.
@@ -350,8 +360,8 @@ npm start              # run the app
 npm run smoke          # sessions, registry, partitions, tab navigation (12 checks)
 npm run smoke:restore  # sessions survive a restart (real cookies)
 npm run smoke:tokens   # DPAPI round-trip + live fake-token rejection per provider (15)
-npm run smoke:creds    # import, per-account recall/selection, defaults, encryption at rest (16)
-npm run smoke:autofill # real page: form detection, fill, capture, origin guard (10)
+npm run smoke:creds    # import, per-account/manager lists, defaults, fill fallback, auto-fill plan, encryption at rest (39)
+npm run smoke:autofill # real page: form detection, fill + request ids, undo, capture, origin guard (15)
 npm run smoke:updates  # version comparison, silent-install mode, auto-update toggle, real release-feed check (11)
 npm run smoke:services # every built-in login page loads inside an isolated partition (42)
 npm run smoke:dark     # Dark Reader darkens a white page, stays out of the page's own JS, re-injects after navigation (9)
@@ -363,7 +373,7 @@ npm start -- --print-paths            # show the app name, version and data fold
 npm start -- --open vercel::personal  # open an account on launch
 ```
 
-The suite is 115 checks across eight modes. `MAM_USER_DATA=<dir>` points any command at an isolated
+The suite is 145 checks across eight modes. `MAM_USER_DATA=<dir>` points any command at an isolated
 profile.
 
 Releases are cut by pushing a `v*` tag: GitHub Actions checks the tag against `package.json`, builds

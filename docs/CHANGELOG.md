@@ -2,6 +2,42 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.9.0 — 2026-11-03
+
+### Added
+- **Each account now shows its own saved logins.** Every account's **Manage** (gear) window has a
+  *Saved logins for this account* list — the logins that actually belong to it (the ones you saved
+  while signed in there, plus imported ones for that service), with the ★ on the account's default
+  and a **Use** button that makes that login the account's default and fills it into the open tab.
+  The rail row shows a small key next to any account that has a saved login, so you can tell while
+  the tab is asleep. Passwords are still never displayed or sent to the window — the list is
+  username, site and source only.
+- **Auto-fill now tells you what it did.** When a sign-in page is filled automatically, a banner
+  appears above that account's page: "Filled <user> into this page" with **Undo** (clears exactly
+  what was filled, and nothing you typed yourself) and a dismiss button. When several saved logins
+  match a site the app no longer silently does nothing — the same banner offers the chooser.
+- **"Never auto-fill for this account"** switch in the account's Manage window. Default off. It only
+  ever *removes* auto-fill for that account; the app-wide **Auto-fill** toggle on Home stays the
+  master switch, and manual **Use** / the rail key are always available.
+- **The saved-logins manager was rebuilt.** It is wider (560 px), every login is a proper row with
+  the identity on the left, the default control in a fixed column and the actions on the right, so
+  the buttons no longer float beside tall rows and long usernames are no longer cut off. Filter with
+  chips: **All**, any service, or any single account, and set or clear an account's default from the
+  row itself.
+
+### Changed
+- A manual fill no longer fails silently. Filling now works from a dashboard too: when the page you
+  are on has no saved login of its own, the account's logins for that service are used (still only
+  ever on the service's own domains — a fill on any other site is refused). When a fill cannot
+  happen, the banner says why ("no sign-in form is visible on this page", "no saved login for this
+  account yet") instead of an alert box.
+
+### Fixed
+- **"Clear default" actually clears.** Choosing it used to set a default instead of clearing the
+  existing one.
+- The ★ markers can no longer get out of step with what is stored: the manager now re-reads the list
+  from the app after each change instead of patching its own copy.
+
 ## 0.8.0 — 2026-10-15
 
 ### Added

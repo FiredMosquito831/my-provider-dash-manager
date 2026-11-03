@@ -58,13 +58,35 @@ window.addEventListener('click', e => {
 }, true);
 
 // ---- fill: main asks us to put a stored credential into the form ----
-ipcRenderer.on('fill-credential', (_e, { username, password, submit }) => {
+// The result carries the requestId main sent, so a page that navigated mid-fill can never have its
+// late answer attributed to a newer request. 0.9.0: also remember WHICH fields we set, so the same
+// document's Undo can clear exactly those and nothing the user typed since.
+let lastFill = null; // { els: [el], requestId }
+ipcRenderer.on('fill-credential', (_e, { requestId, username, password, submit }) => {
   const { user, pw } = findFields();
   const okU = username ? setValue(user, username) : false;
   const okP = setValue(pw, password);
   if (okP) pw.focus(); else if (okU) user.focus();
+  lastFill = { els: [okU ? user : null, okP ? pw : null].filter(Boolean), requestId };
   if (submit && okP && pw.form) { try { pw.form.requestSubmit ? pw.form.requestSubmit() : pw.form.submit(); } catch {} }
-  ipcRenderer.send('fill-result', { user: okU, password: okP });
+  ipcRenderer.send('fill-result', { requestId, ok: !!(okU || okP), user: okU, password: okP });
+});
+
+// ---- undo: clear what the last fill put in, never anything the user typed afterwards ----
+// `fillId` identifies the fill being undone (main sends the requestId it got from that fill); the
+// reply carries its own `requestId` so main can route it. Only the latest fill in THIS document can
+// be undone, and only once.
+ipcRenderer.on('clear-filled', (_e, { requestId, fillId }) => {
+  if (!lastFill || !fillId || lastFill.requestId !== fillId) {
+    ipcRenderer.send('fill-result', { requestId, ok: false, reason: 'nothing-filled' });
+    return;
+  }
+  let cleared = 0;
+  for (const el of lastFill.els) {
+    try { setValue(el, ''); cleared++; } catch {}
+  }
+  lastFill = null;
+  ipcRenderer.send('fill-result', { requestId, ok: cleared > 0, cleared });
 });
 
 // tell main whether this page even has a login form (drives the "fill" affordance)

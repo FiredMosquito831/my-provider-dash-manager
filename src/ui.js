@@ -11,6 +11,7 @@ const $mem = document.getElementById('mem');
 const $home = document.getElementById('home');
 const $modalBack = document.getElementById('modal-back');
 const $modal = document.getElementById('modal');
+const $infobar = document.getElementById('infobar');
 const $extBtn = document.getElementById('ext-btn');
 const $hibAll = document.getElementById('hib-all');
 const $railTop = document.getElementById('railtop');
@@ -226,10 +227,14 @@ function acctRow(a) {
     ? `<button class="act" data-close="${esc(a.key)}" title="Close tab" aria-label="Close tab">${icon('x')}</button>` : '';
   const fillAct = tab && tab.live
     ? `<button class="act" data-fill="${esc(a.key)}" title="Fill this account's saved login into the page" aria-label="Fill login">${icon('key')}</button>` : '';
+  // "Has saved login" indicator: visible while the row is not hovered, so a sleeping account still
+  // tells you a password exists for it (0.8.0 showed nothing until a live tab was open).
+  const keyBadge = a.loginCount
+    ? `<span class="badge savedkey" title="${a.loginCount} saved login${a.loginCount === 1 ? '' : 's'} for this account — open Manage to see them">${icon('key')}</span>` : '';
   return `<div class="acct ${isActive ? 'active' : ''} ${tab ? 'open' : ''}" data-row="${esc(a.key)}" title="${esc(a.label)}">
     <span class="dot" style="background:${colorOf(a.colorIdx, a.svc)}"></span>
     <span class="aname">${esc(a.label)}</span>
-    ${badge}
+    ${badge}${keyBadge}
     <span class="acts">
       ${openAct}${fillAct}${closeAct}
       <button class="act" data-connect="${esc(a.key)}" title="${a.hasToken ? 'API token connected — manage' : 'Connect an API token'}" aria-label="Connect token" style="${a.hasToken ? 'color:var(--ok)' : ''}">${icon('link')}</button>
@@ -271,11 +276,7 @@ $railScroll.addEventListener('click', async e => {
   const fill = e.target.closest('[data-fill]');
   if (fill) {
     e.stopPropagation();
-    try {
-      const r = await window.api.fillLogin(fill.getAttribute('data-fill'));
-      if (r && r.choose) openCredsChooser(fill.getAttribute('data-fill'), r.choose);
-    }
-    catch (err) { alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); }
+    await runLoginAction(fill.getAttribute('data-fill'));
     return;
   }
   const sleep = e.target.closest('[data-sleep]');
@@ -730,6 +731,15 @@ function openEditModal(key, focusToken = false) {
     </div>
     <label>Proxy (optional — http://host:port or socks5://host:port)</label>
     <input type="text" id="m-proxy" value="${esc(acc.proxy || '')}" placeholder="system default" />
+    <label>Saved logins for this account</label>
+    <div class="acctlogins" id="m-logins"><div class="acctlogin empty">Loading…</div></div>
+    <label class="switcher" style="display:block">
+      <span style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="m-noauto" ${acc.noAutoFill ? 'checked' : ''} />
+        <span>Never auto-fill for this account</span>
+      </span>
+    </label>
+    <div class="note" style="margin-top:4px">Auto-fill still needs the app-wide <b>Auto-fill</b> toggle on Home; this switch only stops it for this account. Manual <b>Use</b> and the rail key always work.</div>
     <div class="row"><button class="btn-primary" id="m-save">Save</button><button class="btn-plain" id="m-cancel">Cancel</button></div>
     <div class="row"><button class="btn-danger" id="m-del" title="Deletes this account's stored session">Delete account &amp; wipe session</button></div>
     <div id="m-error" style="font-size:11px;margin-top:8px"></div>
@@ -760,6 +770,14 @@ function openEditModal(key, focusToken = false) {
   };
   const clearBtn = $modal.querySelector('#m-token-clear');
   if (clearBtn) clearBtn.onclick = async () => { await window.api.clearAccountToken(svc, id); closeModal(); };
+  // The per-account Logins list: exactly the logins that match this account, each with Use.
+  renderAccountLogins(key, $modal.querySelector('#m-logins'), $modal.querySelector('#m-error'));
+  // "Never auto-fill" is saved on change (not on Save): it is a standing preference, not a form field.
+  const noAuto = $modal.querySelector('#m-noauto');
+  noAuto.onchange = async () => {
+    try { noAuto.checked = await window.api.accountNoAutoFill(svc, id, noAuto.checked); }
+    catch (err) { const b2 = $modal.querySelector('#m-error'); b2.style.color = 'var(--danger)'; b2.textContent = errText(err); }
+  };
   saveBtn.onclick = async () => {
     await window.api.updateAccount(svc, id, { label: labelInput.value, proxy: $modal.querySelector('#m-proxy').value });
     closeModal();
@@ -773,99 +791,211 @@ function openEditModal(key, focusToken = false) {
   ($modal.querySelector(focusToken ? '#m-token' : '#m-label')).focus();
 }
 
-// ============ saved logins: manager + per-account chooser ============
-// Passwords never reach this renderer: every row is a summary (id/host/username/source), and the
-// fill resolves the password in main against the account and the tab's live URL.
-async function openCredsManagerModal() {
+// ============ saved logins: manager, per-account list, chooser, notices ============
+// Passwords never reach this renderer: every row is a summary (id/host/username/source/★). Main owns
+// the list, the ★ markers and the resolution; the renderer only renders what it is given.
+function errText(err) { return String(err && err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); }
+
+// One entry point for every "use this saved login" click: the rail key, a manager row, a gear row.
+// Main answers either { ok: true } or a reason we can show instead of a dead-end alert.
+async function runLoginAction(key, credentialId) {
+  let r = null;
+  try { r = await window.api.fillLogin(key, credentialId || null); }
+  catch (err) { showNotice(key, { kind: 'failed', reason: errText(err) }); return; }
+  if (r && r.choose) { openCredsChooser(key, r.choose); return; }
+  if (r && r.ok) return;
+  showNotice(key, { kind: 'failed', reason: (r && r.message) || 'Could not fill this login.' });
+}
+
+// ---------- the auto-fill notice (a strip above the account view) ----------
+// Main sends it because the decision (fill / choose / failed) is main's; the banner can be dismissed,
+// undone, or used to pick among several logins. It never shows a password.
+let noticeState = null; // { key, notice }
+function renderInfobar() {
+  const n = noticeState && noticeState.notice;
+  const key = noticeState && noticeState.key;
+  if (!n || state.activeKey !== key) { $infobar.hidden = true; $infobar.innerHTML = ''; return; }
+  $infobar.hidden = false;
+  if (n.kind === 'choose') {
+    $infobar.innerHTML = `<span class="ic">${icon('key')}</span>
+      <span class="msg">More than one saved login matches this site. Pick one:</span>
+      <span class="chips">${n.choices.map(c => `<button data-notice-pick="${esc(c.id)}" title="${esc(c.host)} · ${esc(c.source)}">${esc(c.username || '(no username)')} <span class="who">· ${esc(c.source)}</span></button>`).join('')}</span>
+      <span class="acts"><button class="btn-plain" id="notice-x" title="Dismiss">${icon('x')}</button></span>`;
+    $infobar.querySelectorAll('[data-notice-pick]').forEach(b => {
+      b.onclick = async () => {
+        const r = await window.api.noticeChoose(key, b.getAttribute('data-notice-pick')).catch(err => ({ ok: false, reason: errText(err) }));
+        if (!r.ok) showNotice(key, { kind: 'failed', reason: 'Could not fill that login on this page.' });
+      };
+    });
+  } else if (n.kind === 'filled') {
+    $infobar.innerHTML = `<span class="ic">${icon('key')}</span>
+      <span class="msg">Filled <b>${esc(n.username || 'your saved login')}</b> into this page.</span>
+      <span class="acts">
+        <button class="btn-plain" id="notice-undo">Undo</button>
+        <button class="btn-plain" id="notice-x" title="Dismiss" aria-label="Dismiss">${icon('x')}</button>
+      </span>`;
+    $infobar.querySelector('#notice-undo').onclick = async () => {
+      const r = await window.api.undoFill(key).catch(err => ({ ok: false, reason: errText(err) }));
+      if (!r.ok) showNotice(key, { kind: 'failed', reason: r.reason === 'nothing-filled' ? 'Those fields are no longer on this page.' : 'Could not clear the filled fields.' });
+    };
+  } else {
+    $infobar.innerHTML = `<span class="ic">${icon('key')}</span>
+      <span class="msg">Login not filled — <span class="why">${esc(n.reason || 'no visible sign-in form on this page')}</span>.</span>
+      <span class="acts"><button class="btn-plain" id="notice-x" title="Dismiss" aria-label="Dismiss">${icon('x')}</button></span>`;
+  }
+  const x = $infobar.querySelector('#notice-x');
+  if (x) x.onclick = () => { window.api.dismissNotice(key); noticeState = null; renderInfobar(); };
+}
+function showNotice(key, notice) { noticeState = { key, notice }; renderInfobar(); }
+
+// ---------- per-account Logins list (gear / Manage modal) ----------
+async function renderAccountLogins(key, container, box) {
+  const [svc, id] = key.split('::');
+  let data = { logins: [] };
+  try { data = await window.api.credsAccountList(svc, id); } catch {}
+  const logins = data.logins || [];
+  const tab = state.tabs.find(t => t.key === key && t.live);
+  container.innerHTML = logins.length
+    ? logins.map(l => `<div class="acctlogin">
+        <span class="who">${esc(l.username || '(no username)')}${l.isDefault ? ' <span class="star" title="This account’s default — auto-fill uses it first">★</span>' : ''}</span>
+        <span class="acts"><button class="btn-plain" data-uselogin="${esc(l.id)}" title="${tab ? 'Set as this account’s default and fill it into the open tab' : 'Set as this account’s default — the tab will be filled next time it opens'}">Use</button></span>
+        <span class="meta">${esc(l.host) || 'no site recorded'} · ${esc(l.source)}${l.own ? ' · saved for this account' : ''}</span>
+      </div>`).join('')
+    : `<div class="acctlogin empty">No saved login matches this account${data.signInUrl ? ` — sign in once on ${esc(svcOf(svc).name)} and it is remembered` : ''}.</div>`;
+  container.querySelectorAll('[data-uselogin]').forEach(b => {
+    b.onclick = async () => {
+      let msg;
+      try {
+        await window.api.credsDefault(b.getAttribute('data-uselogin'), svc, id, data.signInUrl || '');
+        const r = await window.api.fillLogin(key, b.getAttribute('data-uselogin'));
+        if (r && r.choose) msg = ['var(--warn)', 'Set as default. Several logins match — pick one from the banner above.'];
+        else if (r && r.ok) msg = ['var(--ok)', `Set as default and filled ${r.filled}.`];
+        else msg = ['var(--warn)', `Set as default. ${(r && r.message) || 'Could not fill it here.'}`];
+      } catch (err) { msg = ['var(--danger)', errText(err)]; }
+      if (box) { box.style.color = msg[0]; box.textContent = msg[1]; }
+      renderAccountLogins(key, container, box);
+    };
+  });
+}
+
+// ---------- the rebuilt credential manager (0.9.0) ----------
+function openCredsManagerModal() {
   $modalBack.hidden = false;
+  $modal.classList.add('wide'); // only this modal is 560 px wide; every other modal keeps 370 px
   window.api.setModalOpen(true);
   $modal.innerHTML = '<h3>Saved logins</h3><div class="note">Loading…</div>';
   let list = [];
-  let serviceFilter = 'all';
-  try { list = await window.api.credsList(); } catch (err) { closeModal(); alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); return; }
-  const render = () => {
+  let filter = { kind: 'all', value: '' }; // kind: all | svc | acct
+  window.api.credsList().then(rows => {
+    list = rows || [];
+    render();
+  }).catch(err => { closeModal(); alert(errText(err)); });
+
+  // Rows for one login, in the grid: identity | default control | actions. Changing the select only
+  // chooses an account; "Apply" sends exactly one instruction to main and re-renders from MAIN's list,
+  // so ★ markers are never juggled here (the 0.8.0 desync: two writes could both set a wrong default).
+  const rowHtml = c => {
+    const defaults = c.defaultForAccounts || [];
+    const accounts = c.accounts || [];
+    const choices = accounts.map(a => {
+      const k = a.key;
+      return `<option value="${esc(k)}" ${defaults.includes(k) ? 'selected' : ''}>${esc((svcOf(a.svc).name) + ' · ' + (a.label || a.id))}</option>`;
+    }).join('');
+    const defaultText = defaults.length
+      ? `<span class="creddefault">★ Default for ${defaults.map(k => { const a = registry.find(x => x.key === k); return a ? `${svcOf(a.svc).name} · ${a.label || a.id}` : k; }).join(' · ')}</span>`
+      : '';
+    return `<div class="credrow">
+      <div class="credidentity">
+        <strong>${esc(c.username || '(no username)')}</strong>
+        <span>${esc(c.host) || 'no site recorded'} · ${esc(c.source)}${c.accountKey ? ` · saved for ${esc(c.accountKey)}` : ''}</span>
+        ${!c.host ? '<span class="creddefault" style="color:var(--warn)">No site recorded — this login cannot autofill anywhere. Re-import it with a site, or delete it here.</span>' : ''}
+        ${defaultText}
+      </div>
+      ${accounts.length ? `<div class="creddefaultctl">
+        <select data-cred-account="${esc(c.id)}" title="Whose default should this login be?">${choices}</select>
+        <button class="btn-plain" data-cred-default="${esc(c.id)}" title="Set this login as the default for the chosen account">Set default</button>
+        ${defaults.length ? `<button class="btn-plain" data-cred-clear="${esc(c.id)}" title="Clear this login's default for the chosen account">Clear default</button>` : ''}
+      </div>` : '<div class="creddefaultctl"><span class="note" style="margin:0">No account can use this login.</span></div>'}
+      <div class="credactions"><button class="btn-plain creddelete" data-cred-del="${esc(c.id)}">Delete</button></div>
+    </div>`;
+  };
+
+  function render() {
     const svcName = k => (k && svcOf(k).name) || 'Other';
-    const serviceKeys = [...new Set(list.flatMap(c => c.serviceKeys || []))].sort((a, b) => svcName(a).localeCompare(svcName(b)));
-    const shown = serviceFilter === 'all' ? list : list.filter(c => (c.serviceKeys || []).includes(serviceFilter));
+    const servicesWith = [...new Set(list.flatMap(c => c.serviceKeys || []))].sort((a, b) => svcName(a).localeCompare(svcName(b)));
+    const accountsWith = [];
+    const seenAcct = new Set();
+    for (const c of list) for (const a of (c.accounts || [])) if (!seenAcct.has(a.key)) { seenAcct.add(a.key); accountsWith.push(a); }
+    accountsWith.sort((a, b) => svcName(a.svc).localeCompare(svcName(b.svc)) || String(a.label).localeCompare(String(b.label)));
+    const shown = filter.kind === 'svc' ? list.filter(c => (c.serviceKeys || []).includes(filter.value))
+      : filter.kind === 'acct' ? list.filter(c => (c.accounts || []).some(a => a.key === filter.value))
+        : list;
     const groups = new Map();
     for (const c of shown) {
-      const key = serviceFilter !== 'all' ? serviceFilter : ((c.serviceKeys || []).length === 1 ? c.serviceKeys[0] : (c.serviceKeys || []).length > 1 ? 'shared' : 'other');
-      const g = key === 'shared' ? 'Shared imports' : svcName(key);
+      const single = (c.serviceKeys || []).length === 1 ? c.serviceKeys[0] : ((c.serviceKeys || []).length > 1 ? 'shared' : 'other');
+      const g = filter.kind === 'svc' ? svcName(filter.value) : single === 'shared' ? 'Shared imports' : svcName(single);
       if (!groups.has(g)) groups.set(g, []);
       groups.get(g).push(c);
     }
-    const rowHtml = c => {
-      const keys = c.serviceKeys || [];
-      // A captured login belongs to its exact account. Imported logins can be assigned to any
-      // account whose service host matches; never offer other accounts for a captured credential.
-      const accounts = c.accountKey
-        ? registry.filter(a => a.key === c.accountKey)
-        : registry.filter(a => keys.includes(a.svc));
-      const defaults = c.defaultForAccounts || [];
-      const choices = accounts.map(a => {
-        const key = `${a.svc}::${a.id}`;
-        return `<option value="${esc(key)}" ${defaults.includes(key) ? 'selected' : ''}>${esc(svcOf(a.svc).name)} · ${esc(a.label || a.id)}</option>`;
-      }).join('');
-      return `<div class="credrow">
-        <div class="credidentity">
-          <strong>${esc(c.username || '(no username)')}</strong>
-          <span>${esc(c.host) || '<no site>'} · ${esc(c.source)}${c.accountKey ? ` · captured for ${esc(c.accountKey)}` : ''}</span>
-          ${!c.host ? '<span class="creddefault">No site recorded — this login cannot autofill anywhere; add the site by editing your browser export, or delete it here.</span>' : ''}
-          ${defaults.length ? `<span class="creddefault">★ Default for ${esc(defaults.map(k => { const a=registry.find(x=>x.key===k); return a ? `${svcOf(a.svc).name} · ${a.label || a.id}` : k; }).join(', '))}</span>` : ''}
-        </div>
-        ${accounts.length ? `<div class="creddefaultctl"><select data-cred-account="${esc(c.id)}"><option value="">Choose account…</option>${choices}<option value="__clear__">Clear default…</option></select><button class="btn-plain" data-cred-default="${esc(c.id)}">Set default</button></div>` : ''}
-        <button class="btn-plain creddelete" data-cred-del="${esc(c.id)}">Delete</button>
-      </div>`;
-    };
+    const chip = (kind, value, label, extra = '') => `<button class="${filter.kind === kind && filter.value === value ? 'on' : ''}" data-cred-filter-kind="${kind}" data-cred-filter-value="${esc(value)}">${extra}${esc(label)}</button>`;
     $modal.innerHTML = `
-      <h3>Saved logins</h3>
-      <div class="note" style="margin-top:0">Passwords stay encrypted and are never shown here. Choose a per-account default for autofill, or delete one login at a time.</div>
-      <label for="cred-filter">Filter by service</label>
-      <select id="cred-filter" class="cred-filter"><option value="all">All services</option>${serviceKeys.map(k => `<option value="${esc(k)}" ${serviceFilter===k?'selected':''}>${esc(svcName(k))}</option>`).join('')}</select>
-      ${shown.length ? [...groups.entries()].map(([svc, items]) => `<section class="credgroup"><h4>${esc(svc)}</h4>${items.map(rowHtml).join('')}</section>`).join('') : '<div class="note">No saved logins match this service.</div>'}
+      <h3>Saved logins <span style="color:var(--muted);font-weight:400;font-size:12px">· ${list.length} stored</span></h3>
+      <div class="note" style="margin-top:0">Passwords stay encrypted and are never shown here. Set an account's default, use a login straight away, or delete one. Folders: filter by service or by account.</div>
+      <div class="credchips">
+        ${chip('all', '', 'All')}
+        ${servicesWith.map(k => chip('svc', k, svcName(k), `<span class="dot" style="background:${esc((svcOf(k) || {}).color || '#888')}"></span>`)).join('')}
+        ${accountsWith.map(a => chip('acct', a.key, `${svcName(a.svc)} · ${a.label || a.id}`, `<span class="dot" style="background:${colorOf((registry.find(r => r.key === a.key) || {}).colorIdx, a.svc)}"></span>`)).join('')}
+      </div>
+      ${shown.length ? [...groups.entries()].map(([g, items]) => `<section class="credgroup"><h4>${esc(g)} <span style="text-transform:none;letter-spacing:0">(${items.length})</span></h4>${items.map(rowHtml).join('')}</section>`).join('') : '<div class="note">No saved logins match this filter.</div>'}
       <div id="m-error" style="font-size:11px;margin-top:8px"></div>
       <div class="row"><button class="btn-plain" id="m-cancel">Close</button></div>`;
     $modal.querySelector('#m-cancel').onclick = closeModal;
-    $modal.querySelector('#cred-filter').onchange = e => { serviceFilter = e.target.value; render(); };
+    $modal.querySelectorAll('[data-cred-filter-kind]').forEach(b => {
+      b.onclick = () => { filter = { kind: b.dataset.credFilterKind, value: b.dataset.credFilterValue }; render(); };
+    });
+    // One write, then re-read from main: the ★ markers can never drift from the stored truth.
+    const apply = async (entry, value, clear) => {
+      const box = $modal.querySelector('#m-error');
+      try {
+        if (!value) { box.style.color = 'var(--warn)'; box.textContent = 'Choose an account for this login first.'; return; }
+        const [svc, id] = value.split('::');
+        list = await window.api.credsDefault(clear ? null : entry.id, svc, id, entry.host);
+        credStats = await window.api.credsStats().catch(() => credStats);
+        render();
+        const box2 = $modal.querySelector('#m-error');
+        if (box2) { box2.style.color = 'var(--ok)'; box2.textContent = clear ? 'Default cleared.' : 'Default set.'; }
+      } catch (err) {
+        const box2 = $modal.querySelector('#m-error');
+        if (box2) { box2.style.color = 'var(--danger)'; box2.textContent = errText(err); }
+      }
+    };
     $modal.querySelectorAll('[data-cred-default]').forEach(b => {
-      b.onclick = async () => {
-        const box = $modal.querySelector('#m-error');
+      b.onclick = () => {
         const entry = list.find(c => c.id === b.dataset.credDefault);
-        if (!entry) { box.style.color = 'var(--warn)'; box.textContent = 'That login is no longer listed.'; return; }
-        const value = $modal.querySelector(`[data-cred-account="${CSS.escape(entry.id)}"]`)?.value;
-        if (!value) { box.style.color = 'var(--warn)'; box.textContent = 'Choose an account first.'; return; }
-        try {
-          if (value === '__clear__') {
-            for (const key of entry.defaultForAccounts || []) { const [svc,id]=key.split('::'); await window.api.credsDefault(null,svc,id,entry.host); }
-            list = list.map(c => c.id === entry.id ? { ...c, defaultForAccounts: [] } : c);
-          } else {
-            const [svc,id] = value.split('::');
-            await window.api.credsDefault(entry.id,svc,id,entry.host);
-            list = list.map(c => ({ ...c, defaultForAccounts: (c.defaultForAccounts || []).filter(k => k !== value) }));
-            // `list.map` above produced NEW objects, so the old `entry` reference is now detached
-            // from the list render() reads. Re-find it and mutate THAT, or the ★ marker keeps the
-            // previous account until the modal is reopened.
-            const fresh = list.find(c => c.id === entry.id);
-            if (fresh) fresh.defaultForAccounts = [...fresh.defaultForAccounts, value];
-          }
-          render();
-        } catch (err) { box.style.color = 'var(--danger)'; box.textContent = String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); }
+        if (!entry) return;
+        apply(entry, $modal.querySelector(`[data-cred-account="${CSS.escape(entry.id)}"]`)?.value, false);
+      };
+    });
+    $modal.querySelectorAll('[data-cred-clear]').forEach(b => {
+      b.onclick = () => {
+        const entry = list.find(c => c.id === b.dataset.credClear);
+        if (!entry) return;
+        apply(entry, $modal.querySelector(`[data-cred-account="${CSS.escape(entry.id)}"]`)?.value, true);
       };
     });
     $modal.querySelectorAll('[data-cred-del]').forEach(b => {
       b.onclick = async () => {
         const box = $modal.querySelector('#m-error');
         try {
-          const id = b.getAttribute('data-cred-del');
-          await window.api.credsDelete(id);
-          list = list.filter(c => c.id !== id);
+          const r = await window.api.credsDelete(b.getAttribute('data-cred-del'));
+          list = r.rows || [];
           credStats = await window.api.credsStats();
           renderHome();
           render();
-        } catch (err) { box.style.color = 'var(--danger)'; box.textContent = String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); }
+        } catch (err) { box.style.color = 'var(--danger)'; box.textContent = errText(err); }
       };
     });
-  };
+  }
   render();
 }
 
@@ -884,15 +1014,15 @@ function openCredsChooser(key, candidates) {
   $modal.querySelector('#m-cancel').onclick = closeModal;
   $modal.querySelectorAll('[data-cred]').forEach(b => {
     b.onclick = async () => {
-      try {
-        const r = await window.api.fillLogin(key, b.getAttribute('data-cred'));
-        if (r && r.filled) closeModal();
-      } catch (err) { alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); }
+      const r = await window.api.fillLogin(key, b.getAttribute('data-cred')).catch(err => ({ ok: false, message: errText(err) }));
+      if (r && r.choose) return; // still ambiguous: keep the chooser up
+      closeModal();
+      if (r && !r.ok) showNotice(key, { kind: 'failed', reason: r.message || 'Could not fill that login on this page.' });
     };
   });
 }
 
-function closeModal() { $modalBack.hidden = true; $modal.innerHTML = ''; window.api.setModalOpen(false); }
+function closeModal() { $modalBack.hidden = true; $modal.innerHTML = ''; $modal.classList.remove('wide'); window.api.setModalOpen(false); }
 $modalBack.addEventListener('click', e => { if (e.target === $modalBack) closeModal(); });
 
 document.addEventListener('keydown', e => {
@@ -900,6 +1030,13 @@ document.addEventListener('keydown', e => {
     if (!$modalBack.hidden) { closeModal(); return; }
     if (state.activeKey !== null) window.api.showHome();
   }
+});
+
+// The banner is main's decision, delivered per tab. Only the ACTIVE tab's notice is drawn — the strip
+// sits above that tab's view (main reserves exactly its height for that view).
+window.api.onAccountNotice(({ key, notice }) => {
+  if (notice) { noticeState = { key, notice }; renderInfobar(); return; }
+  if (noticeState && noticeState.key === key) { noticeState = null; renderInfobar(); }
 });
 
 // ============ wiring ============
@@ -916,7 +1053,7 @@ async function pollMemory() {
 setInterval(pollMemory, 2000);
 pollMemory();
 
-function renderAll() { renderTabCtl(); renderTabs(); renderRail(); renderHome(); }
+function renderAll() { renderTabCtl(); renderTabs(); renderRail(); renderHome(); renderInfobar(); }
 
 window.api.onUpdateState(s => { updateState = s; renderRail(); if (state.activeKey === null) renderHome(); });
 

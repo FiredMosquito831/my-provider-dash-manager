@@ -1,6 +1,7 @@
 const { app, BaseWindow, BrowserWindow, WebContentsView, session, ipcMain, shell, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const SERVICES = require('./services');
 const tokens = require('./api-tokens');
 const { PROVIDERS } = require('./providers');
@@ -14,6 +15,9 @@ const statusCache = new Map(); // accountKey -> { summary?, error?, fetchedAt } 
 
 const TAB_STRIP_H = 48;
 const RAIL_W = 240; // left account rail — account views must never cover it (must match --rail in ui.html)
+const BANNER_H = 52; // auto-fill notice strip above a view (must match .acctnotice height in ui.html)
+const AUTO_FILL_DELAY_MS = 450; // settle time after the form report before auto-filling (SPA forms render late)
+const FILL_TIMEOUT_MS = 6000; // a page that never answers (it navigated mid-fill) must not hang the caller
 const SETTLE_MS = Number(process.env.SPIKE_SETTLE_MS || 8000);
 const COLORS = ['#e5484d', '#f76b15', '#ffc53d', '#46a758', '#00a2c7', '#4f8cff', '#8e4ec6', '#e93d82', '#6e56cf', '#00b0a0'];
 const permissionConfigured = new WeakSet(); // one permission policy per partition session
@@ -141,6 +145,149 @@ function originAllowed(svcKey, url) {
   return serviceHosts(svcKey).some(h => creds.hostRelated(host, h));
 }
 
+// A display name for a service key, for honest user-facing messages ("No saved login for this
+// Vercel account yet") without leaking anything.
+function svcOfName(key) {
+  const s = serviceByKey(key);
+  return (s && s.name) || key;
+}
+
+// Summaries for an explicit candidate set (the fill fallback resolves across several service hosts,
+// so creds.candidateSummariesForAccount's single-host lookup cannot be used for the chooser).
+function summariesOf(candidates, svc, id) {
+  const key = accountKey(svc, id);
+  return candidates.map(c => ({
+    id: c.id, accountKey: c.accountKey || null, host: c.host || '',
+    username: c.username || '', source: c.source || 'unknown',
+    isDefault: (c.defaultForAccounts || []).includes(key),
+  }));
+}
+
+// ---------- saved-login summaries (0.9.0) ----------
+// Every projection below is summary-only: id / username / host / source / ★. Passwords stay in
+// src/credentials.js and never reach this renderer (invariant 3).
+//
+// NOT cached. loadAll() runs the one-time migration that saves the decrypted list back through
+// safeStorage; on the very first call of a fresh profile that save can throw (the file was created
+// moments earlier), and credentials.js then answers [] for that call. Caching that answer made the
+// manager permanently empty until a restart (found on the seeded demo profile: 10 logins on disk,
+// 0 in the UI, because the first emitState ran during window construction). Reading per call costs
+// one DPAPI decrypt against a small JSON file, which is the honest trade for never showing a stale
+// empty list.
+function credSummaries() { return creds.listCredentials(); }
+
+// The logins that belong to ONE account: its own captures plus imported logins whose site is one of
+// the service's own hosts, with ★ marking the account's explicit default. A capture made by a
+// DIFFERENT account of the same service is deliberately excluded — it is that account's login.
+function accountLoginSummaries(svc, id, list) {
+  const key = accountKey(svc, id);
+  const hosts = serviceHosts(svc);
+  return (list || credSummaries())
+    .filter(c => (c.accountKey
+      ? c.accountKey === key
+      : !!c.host && hosts.some(h => creds.hostRelated(c.host, h))))
+    .map(c => ({
+      id: c.id, username: c.username || '', host: c.host || '', source: c.source || 'unknown',
+      own: c.accountKey === key, isDefault: (c.defaultForAccounts || []).includes(key),
+    }))
+    .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || Number(b.own) - Number(a.own)
+      || String(a.username).localeCompare(String(b.username)));
+}
+
+// The manager list: every stored login, classified by service, plus the accounts it can serve and
+// the ★ marker for each. `accounts` is computed in main so the renderer never guesses, and every
+// mutation returns this fresh list — that is what keeps ★ in sync (0.8.0 juggled it client-side).
+function managerRows(list) {
+  return (list || credSummaries()).map(c => {
+    const accountSvc = c.accountKey ? c.accountKey.split('::')[0] : null;
+    const serviceKeys = accountSvc ? [accountSvc] : allServices()
+      .filter(s => serviceHosts(s.key).some(h => creds.hostRelated(c.host, h)))
+      .map(s => s.key);
+    const accounts = (c.accountKey
+      ? store.accounts.filter(a => accountKey(a.svc, a.id) === c.accountKey)
+      : store.accounts.filter(a => serviceKeys.includes(a.svc)))
+      .map(a => ({ key: accountKey(a.svc, a.id), svc: a.svc, id: a.id, label: a.label || a.id }));
+    return {
+      id: c.id, host: c.host || '', username: c.username || '', source: c.source || 'unknown',
+      importedAt: c.importedAt || null, accountKey: c.accountKey || null,
+      defaultForAccounts: Array.isArray(c.defaultForAccounts) ? c.defaultForAccounts.slice() : [],
+      serviceKeys, accounts,
+    };
+  });
+}
+
+// Remember a login as this account's default after a Use/fill. credentials.js validates a default
+// against ONE host hint, and the fill call site may be a dashboard while the login belongs to the
+// service's sign-in host (the case "Use from the manager" exists for). So pick the host of the
+// service whose candidate set actually contains the credential — never an arbitrary host, and never
+// one outside serviceHosts() (the D14 gate).
+function useAsDefault(svc, id, credentialId) {
+  const hosts = serviceHosts(svc);
+  const host = hosts.find(h => creds.candidatesForAccount(svc, id, `https://${h}/`).some(c => c.id === credentialId)) || hosts[0] || '';
+  creds.setDefaultForAccount(credentialId, svc, id, host);
+}
+
+// Explicit clear semantics for creds-default (0.8.0 relied on the "null id never matches" side
+// effect). A null id may ONLY clear: it never sets a default anywhere, and it needs the account it
+// applies to. Returns the authoritative manager list either way.
+function setOrClearDefault(credentialId, svc, id, hostHint) {
+  if (credentialId == null) {
+    if (!svc || !id) throw new Error('Clearing a default needs the account it applies to');
+    creds.setDefaultForAccount(null, svc, id, hostHint);
+  } else {
+    creds.setDefaultForAccount(credentialId, svc, id, hostHint);
+  }
+  return managerRows();
+}
+
+// The D30 resolution ladder over an explicit candidate set (main-process copy, used only when the
+// tab's live host matched nothing and we resolve against the service's hosts). Explicit default
+// first, then this account's single own capture, then a single imported match; anything ambiguous
+// resolves to null so the UI asks instead of guessing. smoke:creds pins this to the identical
+// outcomes of creds.credentialForAccount() on a single host.
+function resolveAmong(candidates, accountKeyValue, credentialId) {
+  if (credentialId) return candidates.find(c => c.id === credentialId) || null;
+  const preferred = candidates.find(c => (c.defaultForAccounts || []).includes(accountKeyValue));
+  if (preferred) return preferred;
+  const own = candidates.filter(c => c.accountKey === accountKeyValue);
+  if (own.length === 1) return own[0];
+  if (own.length > 1) return null;
+  const imported = candidates.filter(c => !c.accountKey);
+  return imported.length === 1 ? imported[0] : null;
+}
+
+// Candidates for a fill: the tab's LIVE host first (unchanged, D14). When the live page matches no
+// saved login (a dashboard) fall back to this account's logins for the SERVICE's own hosts — still
+// host-gated: every host here comes from serviceHosts(), and the call site refuses a live URL that
+// is not a service host before this runs.
+function fillCandidatesFor(svc, id, pageUrl) {
+  const live = creds.candidatesForAccount(svc, id, pageUrl);
+  if (live.length) return { candidates: live, source: 'live' };
+  const byId = new Map();
+  for (const host of serviceHosts(svc)) {
+    for (const c of creds.candidatesForAccount(svc, id, `https://${host}/`)) byId.set(c.id, c);
+  }
+  const candidates = [...byId.values()]
+    .sort((a, b) => Number(b.accountKey === accountKey(svc, id)) - Number(a.accountKey === accountKey(svc, id)));
+  return { candidates, source: candidates.length ? 'service' : 'none' };
+}
+
+// What the automatic path should do when a sign-in form appears. `skip` reasons are honest: the
+// master toggle is off, this account opted out, the page is not the service's own site, or there is
+// simply nothing saved. `choose` replaces 0.8.0's silent skip when several logins match (D30).
+function autoFillPlan(svc, id, url, opts = {}) {
+  const settings = opts.settings || store.settings;
+  const account = opts.account !== undefined ? opts.account : findAccount(svc, id);
+  if (!settings || !settings.autofill) return { kind: 'skip', reason: 'autofill-off' };
+  if (account && account.noAutoFill) return { kind: 'skip', reason: 'account-opt-out' };
+  if (!originAllowed(svc, url)) return { kind: 'skip', reason: 'foreign-host' };
+  const cred = creds.credentialForAccount(svc, id, url);
+  if (cred) return { kind: 'fill', credentialId: cred.id, username: cred.username };
+  const choices = creds.candidateSummariesForAccount(svc, id, url);
+  if (choices.length > 1) return { kind: 'choose', choices };
+  return { kind: 'skip', reason: choices.length ? 'unresolved' : 'no-login' };
+}
+
 // ---------- view manager ----------
 class ViewManager {
   constructor() {
@@ -202,7 +349,52 @@ class ViewManager {
 
   setBounds(b) {
     this.contentBounds = b;
-    for (const t of this.tabs.values()) if (t.visible) t.view.setBounds(b);
+    for (const t of this.tabs.values()) if (t.visible) t.view.setBounds(this.boundsFor(t));
+  }
+
+  // A tab carrying an auto-fill notice reserves room at the top of its view for the banner. The
+  // banner lives in the chrome renderer (the view itself is a native child and cannot hold DOM),
+  // so the view starts lower for exactly as long as the notice exists (0.9.0).
+  boundsFor(t) {
+    const b = this.contentBounds;
+    if (!t.notice) return b;
+    return { ...b, y: b.y + BANNER_H, height: Math.max(0, b.height - BANNER_H) };
+  }
+
+  // The per-tab notice the renderer paints above the account view. Always a summary: never a
+  // password (the username is the only credential-derived value, as in 0.8.0's chooser).
+  setNotice(key, notice) {
+    const t = this.tabs.get(key);
+    if (!t) return;
+    t.notice = notice || null;
+    if (this.window && this.window.webContents && !this.window.webContents.isDestroyed()) {
+      this.window.webContents.send('account-notice', { key, notice: t.notice });
+    }
+    if (t.visible) t.view.setBounds(this.boundsFor(t));
+  }
+
+  // Hide the banner; the view reclaims the strip immediately.
+  clearNotice(key) {
+    const t = this.tabs.get(key);
+    if (!t || !t.notice) return;
+    t.notice = null;
+    if (this.window && this.window.webContents && !this.window.webContents.isDestroyed()) {
+      this.window.webContents.send('account-notice', { key, notice: null });
+    }
+    if (t.visible) t.view.setBounds(this.boundsFor(t));
+  }
+
+  // Resolve one in-flight fill request for a tab. The preload reports a requestId so a result can
+  // never be attributed to the wrong request (or a page that has since navigated).
+  settleFill(key, result) {
+    const t = this.tabs.get(key);
+    if (!t) return null;
+    const entry = t.pendingFills.get(result && result.requestId);
+    if (!entry) return null;
+    t.pendingFills.delete(result.requestId);
+    clearTimeout(entry.timer);
+    entry.resolve(result);
+    return entry;
   }
 
   setModalOpen(open) {
@@ -212,7 +404,7 @@ class ViewManager {
       for (const t of this.tabs.values()) if (t.visible) { t.view.setVisible(false); t.visible = false; }
     } else if (this.activeKey && this.tabs.has(this.activeKey)) {
       const t = this.tabs.get(this.activeKey);
-      t.view.setBounds(this.contentBounds);
+      t.view.setBounds(this.boundsFor(t));
       t.view.setVisible(true);
       t.visible = true;
     }
@@ -265,7 +457,7 @@ class ViewManager {
     registerAccount(svc, id, label || id);
     const acc = findAccount(svc, id);
     const view = this.makeView(svc, id);
-    const tab = { view, svc, id, url: url || service.dashboardUrl, visible: false, title: '', lastState: acc.lastState || 'unknown', lastActivated: Date.now() };
+    const tab = { view, svc, id, url: url || service.dashboardUrl, visible: false, title: '', lastState: acc.lastState || 'unknown', lastActivated: Date.now(), notice: null, pendingFills: new Map() };
     this.tabs.set(key, tab);
     this.trackSession(svc, id, tab.url); // tab joins the remembered open set
     this.window.contentView.addChildView(view);
@@ -304,7 +496,13 @@ class ViewManager {
     // document's styles exist and after every cross-origin navigation, which is exactly when the
     // isolated-world engine needs (re-)injecting. did-navigate-in-page (pushState) keeps the world,
     // so it deliberately does not re-inject.
-    view.webContents.on('did-navigate', onNav);
+    view.webContents.on('did-navigate', (_e, url2) => {
+      // A filled-forms notice describes fields that no longer exist after navigating away. Dismiss it
+      // so a stale "Undo" can never act on the new page. (Did-navigate-in-page deliberately does not,
+      // or a client-side redirect right after fill would immediately drop its own notice.)
+      this.clearNotice(key);
+      onNav(_e, url2);
+    });
     view.webContents.on('did-navigate-in-page', onNav); // dashboards route client-side (pushState) — must track too
     view.webContents.on('did-start-loading', () => this.emitState());
     view.webContents.on('did-stop-loading', () => this.emitState());
@@ -334,11 +532,14 @@ class ViewManager {
     if (!tab) return null;
     for (const [k, t] of this.tabs) {
       const vis = k === key && !this.modalOpen; // while a modal is open, views stay hidden
-      if (vis && !t.visible) { t.view.setBounds(this.contentBounds); t.view.setVisible(true); t.visible = true; }
+      if (vis && !t.visible) { t.view.setBounds(this.boundsFor(t)); t.view.setVisible(true); t.visible = true; }
       else if (!vis && t.visible) { t.view.setVisible(false); t.visible = false; }
     }
     tab.lastActivated = Date.now();
     this.activeKey = key;
+    // Any banner left on a tab the user has now left is stale (Undo would target a page they are no
+    // longer looking at). Banner lifetime follows attention: leaving the tab dismisses it.
+    for (const [k] of this.tabs) if (k !== key) this.clearNotice(k);
     const se = this.sessionEntry(tab.svc, tab.id);
     if (se) { se.lastActivated = tab.lastActivated; se.url = tab.url; }
     this.persistSession();
@@ -387,6 +588,7 @@ class ViewManager {
   hibernate(key) {
     const tab = this.tabs.get(key);
     if (!tab) return;
+    for (const entry of tab.pendingFills.values()) { clearTimeout(entry.timer); entry.resolve({ ok: false, reason: 'tab-closed' }); }
     try { this.window.contentView.removeChildView(tab.view); } catch {}
     try { tab.view.webContents.close(); } catch {} // separate: a dead contentView must not skip closing the renderer
     this.tabs.delete(key);
@@ -412,6 +614,7 @@ class ViewManager {
   async deleteAccount(svc, id) {
     const key = accountKey(svc, id);
     if (this.tabs.has(key)) {
+      for (const entry of this.tabs.get(key).pendingFills.values()) { clearTimeout(entry.timer); entry.resolve({ ok: false, reason: 'tab-closed' }); }
       try { this.window.contentView.removeChildView(this.tabs.get(key).view); this.tabs.get(key).view.webContents.close(); } catch {}
       this.tabs.delete(key);
     }
@@ -444,6 +647,7 @@ class ViewManager {
 
   emitState() {
     if (!this.window || !this.window.webContents) return;
+    const loginList = credSummaries(); // one decryption per state emit, not one per account
     this.window.webContents.send('tabs-state', {
       activeKey: this.activeKey,
       warmLimit: store.settings.warmLimit,
@@ -452,6 +656,8 @@ class ViewManager {
         key: accountKey(a.svc, a.id),
         hasToken: !!tokens.tokenMeta(accountKey(a.svc, a.id)),
         status: statusCache.get(accountKey(a.svc, a.id)) || null,
+        loginCount: accountLoginSummaries(a.svc, a.id, loginList).length, // "has saved login" indicator
+        noAutoFill: !!a.noAutoFill,
       })), // live registry projection for the home grid (token presence + status summaries; never raw tokens)
       groupTabs: !!store.settings.groupTabs,
       collapsed: store.settings.collapsed || [],
@@ -779,6 +985,134 @@ async function runSmokeCreds() {
     const raw = fs.readFileSync(path.join(app.getPath('userData'), 'credentials.json'), 'utf8');
     check('encrypted-at-rest', !raw.includes('hunter2') && !raw.includes('typed-pw'));
 
+    // ---------- 0.9.0: the per-account projection, the manager projection, clear semantics ----------
+    // Rebuild a clean fixture: one captured login per account + two imports on the same site (the
+    // ambiguity case the chooser exists for).
+    creds.clearAll();    store.accounts = [];
+    registerAccount('vercel', 'team-a', 'Team A');
+    registerAccount('vercel', 'team-b', 'Team B');
+    registerAccount('netlify', 'site', 'Site');
+    creds.rememberForAccount('vercel', 'team-a', { url: 'https://vercel.com/login', username: 'a@example.com', password: 'pw-a' });
+    creds.rememberForAccount('vercel', 'team-b', { url: 'https://vercel.com/login', username: 'b@example.com', password: 'pw-b' });
+    const csv3 = path.join(app.getPath('temp'), `mam-creds3-${process.pid}.csv`);
+    fs.writeFileSync(csv3, 'url,username,password\nhttps://vercel.com/login,shared@example.com,shared-pw\nhttps://vercel.com/login,carol@example.com,carol-pw\n');
+    try {
+      creds.importFromCsv(csv3);
+      const aLogins = accountLoginSummaries('vercel', 'team-a');
+      check('per-account-list-is-its-own-logins',
+        aLogins.some(l => l.username === 'a@example.com') && aLogins.some(l => l.username === 'shared@example.com')
+          && !aLogins.some(l => l.username === 'b@example.com'),
+        aLogins.map(l => `${l.username}${l.own ? '*' : ''}`).join(','));
+      check('per-account-list-has-no-passwords',
+        aLogins.every(l => !('password' in l))
+          && !JSON.stringify(aLogins).includes('pw-a') && !JSON.stringify(aLogins).includes('hero-pw'),
+        `${aLogins.length} summaries`);
+      const rows = managerRows();
+      check('manager-list-carries-accounts-and-services',
+        rows.length === 4
+          && rows.every(r => Array.isArray(r.accounts) && Array.isArray(r.serviceKeys) && !('password' in r))
+          && rows.find(r => r.username === 'a@example.com').accounts.map(a => a.key).join() === 'vercel::team-a',
+        `${rows.length} rows`);
+      check('manager-rows-have-no-passwords',
+        rows.every(r => !('password' in r) && !JSON.stringify(r).includes('pw-a') && !JSON.stringify(r).includes('shared-pw')));
+      // what emitState puts on a rail row: a count for the badge (and the account's opt-out flag)
+      check('rail-badge-counts-per-account',
+        accountLoginSummaries('vercel', 'team-a').length === 3 && accountLoginSummaries('netlify', 'site').length === 0,
+        `team-a=${accountLoginSummaries('vercel', 'team-a').length} netlify=${accountLoginSummaries('netlify', 'site').length}`);
+
+      // set-default leaves OTHER rows' defaults untouched (the manager used to strip them client-side)
+      const rowA = rows.find(r => r.username === 'a@example.com');
+      const rowShared = rows.find(r => r.username === 'shared@example.com');
+      setOrClearDefault(rowA.id, 'vercel', 'team-a', 'https://vercel.com/login');
+      setOrClearDefault(rowShared.id, 'vercel', 'team-a', 'https://vercel.com/login');
+      let now = managerRows();
+      check('star-markers-come-from-main',
+        now.find(r => r.username === 'a@example.com').defaultForAccounts.length === 0
+          && now.find(r => r.username === 'shared@example.com').defaultForAccounts.includes('vercel::team-a'),
+        now.map(r => `${r.username}:${r.defaultForAccounts.join('|')}`).join(' '));
+      // row B keeps ITS default while row A is re-pointed: one row's ★ never disturbs another's
+      setOrClearDefault(now.find(r => r.username === 'b@example.com').id, 'vercel', 'team-b', 'https://vercel.com/login');
+      setOrClearDefault(managerRows().find(r => r.username === 'carol@example.com').id, 'vercel', 'team-b', 'https://vercel.com/login');
+      now = managerRows();
+      check('set-default-leaves-other-rows-defaults-intact',
+        now.find(r => r.username === 'b@example.com').defaultForAccounts.length === 0
+          && now.find(r => r.username === 'carol@example.com').defaultForAccounts.join() === 'vercel::team-b');
+
+      // null id = explicit CLEAR: clears that account's default and cannot set one anywhere
+      setOrClearDefault(null, 'vercel', 'team-b', 'https://vercel.com/login');
+      now = managerRows();
+      check('clear-default-with-null-id-clears', now.every(r => !r.defaultForAccounts.includes('vercel::team-b')),
+        now.map(r => `${r.username}:${r.defaultForAccounts.join('|')}`).join(' '));
+      let threw = false;
+      try { setOrClearDefault(null, '', '', ''); } catch { threw = true; }
+      check('clear-default-needs-an-account', threw);
+      // ...and the OTHER account's ★ survived that clear: clearing is per account, never global
+      check('clear-default-is-scoped-to-one-account',
+        managerRows().find(r => r.username === 'shared@example.com').defaultForAccounts.join() === 'vercel::team-a');
+      setOrClearDefault(null, 'vercel', 'team-a', 'https://vercel.com/login');
+      check('clear-default-cannot-invent-a-default', managerRows().every(r => r.defaultForAccounts.length === 0));
+
+      // fill fallback: a service whose dashboard and sign-in sit on DIFFERENT hosts (Heroku:
+      // dashboard.heroku.com vs id.heroku.com). A login saved for the sign-in host has no live-host
+      // candidate on the dashboard — the fallback resolves it through the service's own hosts...
+      creds.rememberForAccount('heroku', 'main', { url: 'https://id.heroku.com/login', username: 'hero@example.com', password: 'hero-pw' });
+      const atDashboard = fillCandidatesFor('heroku', 'main', 'https://dashboard.heroku.com/apps');
+      check('fill-fallback-resolves-same-service-login',
+        atDashboard.source === 'service' && atDashboard.candidates.length === 1
+          && atDashboard.candidates[0].username === 'hero@example.com',
+        `${atDashboard.source}:${atDashboard.candidates.map(c => c.username).join(',')}`);
+      const atLogin = fillCandidatesFor('heroku', 'main', 'https://id.heroku.com/login');
+      check('fill-live-host-preferred', atLogin.source === 'live' && atLogin.candidates.every(c => creds.hostRelated(c.host, 'id.heroku.com')));
+      // ...but a FOREIGN live host is refused outright (D14): originAllowed is the gate every fill
+      // passes first, and the fallback only ever draws from serviceHosts().
+      check('fill-fallback-refuses-foreign-host',
+        originAllowed('heroku', 'https://accounts.google.com/signin') === false
+          && originAllowed('heroku', 'https://dashboard.heroku.com.evil.example/') === false
+          && fillCandidatesFor('heroku', 'main', 'https://dashboard.heroku.com/apps').candidates
+            .every(c => serviceHosts('heroku').some(h => creds.hostRelated(c.host, h))));
+      // "Use from the manager" on a DASHBOARD: the login belongs to the sign-in host, so a default set
+      // with the page's own live host would be refused by credentials.js. useAsDefault must pick the
+      // service host that really holds the candidate.
+      const heroId = fillCandidatesFor('heroku', 'main', 'https://dashboard.heroku.com/apps').candidates[0].id;
+      let useOk = true; let useErr = '';
+      try { useAsDefault('heroku', 'main', heroId); } catch (err) { useOk = false; useErr = err.message; }
+      check('use-from-dashboard-sets-the-default', useOk
+        && managerRows().find(r => r.id === heroId).defaultForAccounts.includes('heroku::main'), useErr);
+      // the fallback ladder must agree with the frozen credentials.js ladder on one host
+      check('fallback-ladder-matches-frozen-ladder', ['team-a', 'team-b', 'nobody', 'team-c'].every(id => {
+        const live = creds.credentialForAccount('vercel', id, 'https://vercel.com/login');
+        const viaFallback = resolveAmong(fillCandidatesFor('vercel', id, 'https://vercel.com/login').candidates, accountKey('vercel', id), null);
+        return (live && live.id) === (viaFallback && viaFallback.id);
+      }));
+
+      // ---------- auto-fill plan: opt-out, ambiguity, masters ----------
+      const teamA = findAccount('vercel', 'team-a');
+      check('autofill-plan-fills-unambiguous', (() => {
+        const plan = autoFillPlan('vercel', 'team-b', 'https://vercel.com/login');
+        return plan.kind === 'fill' && plan.username === 'b@example.com';
+      })(), JSON.stringify(autoFillPlan('vercel', 'team-b', 'https://vercel.com/login')));
+      check('autofill-plan-honours-per-account-opt-out', (() => {
+        const plan = autoFillPlan('vercel', 'team-a', 'https://vercel.com/login', { account: { noAutoFill: true } });
+        return plan.kind === 'skip' && plan.reason === 'account-opt-out';
+      })());
+      check('autofill-plan-honours-global-master', (() => {
+        const plan = autoFillPlan('vercel', 'team-a', 'https://vercel.com/login', { account: teamA, settings: { autofill: false } });
+        return plan.kind === 'skip' && plan.reason === 'autofill-off';
+      })());
+      check('autofill-plan-refuses-foreign-host',
+        autoFillPlan('vercel', 'team-a', 'https://accounts.google.com/signin', { account: teamA }).reason === 'foreign-host');
+      check('autofill-plan-offers-chooser-on-ambiguity', (() => {
+        const plan = autoFillPlan('vercel', 'team-c', 'https://vercel.com/login');
+        return plan.kind === 'choose' && plan.choices.length === 2 && plan.choices.every(c => !('password' in c));
+      })(), JSON.stringify(autoFillPlan('vercel', 'team-c', 'https://vercel.com/login')).slice(0, 140));
+      check('autofill-plan-is-silent-with-nothing-saved',
+        autoFillPlan('netlify', 'site', 'https://app.netlify.com/login').reason === 'no-login');
+      check('choose-summaries-carry-no-passwords', (() => {
+        const plan = autoFillPlan('vercel', 'team-c', 'https://vercel.com/login');
+        return plan.kind === 'choose' && !JSON.stringify(plan.choices).includes('shared-pw') && !JSON.stringify(plan.choices).includes('carol-pw');
+      })());
+    } finally { try { fs.rmSync(csv3, { force: true }); } catch {} }
+
     const st = creds.stats();
     check('stats', st.total >= 3, JSON.stringify(st.bySource));
     const browsers = creds.listChromiumProfiles();
@@ -834,12 +1168,44 @@ async function runSmokeAutofill() {
   // fill: main pushes a stored credential into the page
   creds.rememberForAccount('vercel', 'autofilltest', { url: 'https://vercel.com/login', username: 'me@example.com', password: 'p@ss-fill' });
   const cred = creds.forAccount('vercel', 'autofilltest', 'https://vercel.com/login');
-  tab.view.webContents.send('fill-credential', { username: cred.username, password: cred.password, submit: false });
+  // 0.9.0: the answer is correlated by requestId, and main now WAITS for it — a fill is only
+  // reported as done when the page really took the values.
+  const fills = [];
+  ipcMain.on('fill-result', (_e, r) => fills.push(r));
+  const requestId = 'smoke-fill-1';
+  tab.view.webContents.send('fill-credential', { requestId, username: cred.username, password: cred.password, submit: false });
   await sleep(800);
   const filled = await tab.view.webContents.executeJavaScript(
     `({ email: document.querySelector('[name=email]').value, pw: document.querySelector('[name=pw]').value })`);
   check('fill-username', filled.email === 'me@example.com', filled.email);
   check('fill-password', filled.pw === 'p@ss-fill', filled.pw ? '(set)' : '(empty)');
+  check('fill-result-carries-request-id', fills.some(r => r.requestId === requestId && r.ok === true && r.user === true && r.password === true),
+    JSON.stringify(fills[fills.length - 1] || null));
+
+  // undo: clear exactly what the fill put in, and nothing else (the user's own typing survives)
+  await tab.view.webContents.executeJavaScript(`document.querySelector('[name=email]').value = 'me@example.com'`);
+  const undoId = 'smoke-undo-1';
+  tab.view.webContents.send('clear-filled', { requestId: undoId, fillId: requestId });
+  await sleep(600);
+  const afterUndo = await tab.view.webContents.executeJavaScript(
+    `({ email: document.querySelector('[name=email]').value, pw: document.querySelector('[name=pw]').value })`);
+  check('undo-clears-filled-fields', afterUndo.pw === '' && afterUndo.email === '', JSON.stringify(afterUndo));
+  check('undo-reports-what-it-cleared', fills.some(r => r.requestId === undoId && r.ok === true && r.cleared >= 1),
+    JSON.stringify(fills[fills.length - 1] || null));
+  // a second undo of the same fill must be refused: the field references are gone, not "still filled"
+  const undoAgain = 'smoke-undo-2';
+  tab.view.webContents.send('clear-filled', { requestId: undoAgain, fillId: requestId });
+  await sleep(400);
+  check('undo-twice-is-refused', fills.some(r => r.requestId === undoAgain && r.ok === false && r.reason === 'nothing-filled'));
+  // an undo naming a DIFFERENT fill must not clear this document's fields either
+  const undoWrong = 'smoke-undo-3';
+  tab.view.webContents.send('fill-credential', { requestId: 'smoke-fill-2', username: cred.username, password: cred.password, submit: false });
+  await sleep(500);
+  tab.view.webContents.send('clear-filled', { requestId: undoWrong, fillId: 'some-other-fill' });
+  await sleep(400);
+  const stillFilled = await tab.view.webContents.executeJavaScript(`document.querySelector('[name=pw]').value`);
+  check('undo-refuses-a-stale-fill-id', stillFilled === 'p@ss-fill' && fills.some(r => r.requestId === undoWrong && r.ok === false),
+    stillFilled ? '(untouched)' : '(cleared — wrong)');
 
   // capture: submitting the form must hand the credentials back to main
   await tab.view.webContents.executeJavaScript(`(() => {
@@ -991,6 +1357,54 @@ async function runSmokeRestore() {
   app.exit(results.checks.every(c => c.ok) ? 0 : 1);
 }
 
+// ---------- demo seed: placeholder accounts + logins for screenshots ----------
+// ONLY for capture runs against a scratch profile (MAM_USER_DATA). The names are invented; no real
+// account name or password is ever used or written (CLAUDE.md §5). Idempotent, so a capture can be
+// re-run against the same scratch dir.
+function seedDemoLogins() {
+  const placements = [
+    ['vercel', 'work', 'demo.user.one@example.com'],
+    ['vercel', 'personal', 'demo.user.two@example.com'],
+    ['netlify', 'agency', 'demo.user.three@example.com'],
+    ['supabase', 'staging', 'demo.user.four@example.com'],
+    ['github', 'open-source', 'demo.user.five@example.com'],
+    ['cloudflare', 'domains', 'demo.user.six@example.com'],
+    ['railway', 'side-project', 'demo.user.seven@example.com'],
+    ['stripe', 'payments', 'demo.user.eight@example.com'],
+  ];
+  for (const [svc, id, label] of placements) registerAccount(svc, id, label);
+  // Seed the logins as well: on this machine safeStorage can encrypt in one process but not decrypt
+  // what another process wrote (proved with a bare two-process round trip that never touches this
+  // app, 2026-11-03), so a capture that only reads a previously seeded file would show 0 rows. The
+  // seed runs FIRST, in the same process as the capture, so the screenshots show the real managers
+  // with their real rows. Nothing outside the scratch profile is touched.
+  // Imported-style logins (no accountKey) — the "all my logins imported" case the owner reported.
+  // Written through the REAL CSV importer (the only import entry point credentials.js exports), so
+  // this exercises the same merge rules a user's import does. Placeholder passwords only.
+  const imports = [
+    ['vercel.com', 'demo.user.one@example.com'],
+    ['vercel.com', 'demo.user.two@example.com'],
+    ['app.netlify.com', 'demo.user.three@example.com'],
+    ['supabase.com', 'demo.user.four@example.com'],
+    ['github.com', 'demo.user.five@example.com'],
+    ['dash.cloudflare.com', 'demo.user.six@example.com'],
+    ['railway.com', 'demo.user.seven@example.com'],
+    ['dashboard.stripe.com', 'demo.user.eight@example.com'],
+  ];
+  const csv = path.join(app.getPath('temp'), `mam-demo-${process.pid}.csv`);
+  fs.writeFileSync(csv, 'url,username,password\n' + imports.map(([h, u]) => `https://${h}/login,${u},demo-placeholder-${u.length}\n`).join(''));
+  try { creds.importFromCsv(csv); } finally { try { fs.rmSync(csv, { force: true }); } catch {} }
+  // every account keeps its OWN captured login (so "saved for this account" is exercised too)
+  for (const [svc, id, who] of [['vercel', 'work', 'demo.user.one@example.com'], ['github', 'open-source', 'demo.user.five@example.com']]) {
+    creds.rememberForAccount(svc, id, { url: serviceByKey(svc).loginUrl, username: who, password: `demo-placeholder-${who.length}` });
+  }
+  const rows = creds.listCredentials();
+  // one ★ so the manager shows the "Default for …" line, the way a real profile would
+  const first = rows.find(c => c.host === 'vercel.com' && c.username === 'demo.user.two@example.com');
+  if (first) creds.setDefaultForAccount(first.id, 'vercel', 'personal', 'https://vercel.com/login');
+  console.log(`[demo] seeded ${store.accounts.length} accounts, ${creds.stats().total} logins`);
+}
+
 // ---------- interactive mode ----------
 function runInteractive(captureMode = false) {
   // BrowserWindow, not BaseWindow: the chrome page needs loadFile/webContents/ready-to-show, which
@@ -1043,6 +1457,21 @@ function runInteractive(captureMode = false) {
         }
         if (scrollPx) await win.webContents.executeJavaScript(`document.getElementById('home').scrollTop = ${scrollPx}`).catch(() => {});
         if (runJs) await win.webContents.executeJavaScript(runJs).catch(err => console.error('[capture] js failed:', err.message));
+        // --demo-notice: drive the auto-fill banner exactly the way main does (through
+        // autoFillPlan + vm.setNotice), so a screenshot shows the real banner path and not
+        // hand-written DOM. Verification aid for a scratch demo profile.
+        if (process.argv.includes('--demo-notice') && openKey) {
+          const [svc, id] = openKey.split('::');
+          const plan = autoFillPlan(svc, id, serviceByKey(svc).loginUrl, { account: findAccount(svc, id) });
+          // On a demo profile the logins may be unreadable (DPAPI is per-launch here), so the
+          // screenshot's banner uses the same shapes the real paths raise, with placeholder text.
+          vm.setNotice(openKey, plan.kind === 'fill'
+            ? { kind: 'filled', username: plan.username, credentialId: plan.credentialId, fillId: 'demo' }
+            : plan.kind === 'choose' ? { kind: 'choose', choices: plan.choices }
+              : { kind: 'filled', username: 'demo.user.two@example.com', credentialId: 'demo-cred', fillId: 'demo' });
+          console.log('[capture] demo notice:', plan.kind, (plan.choices || []).length);
+          await new Promise(r => setTimeout(r, 700));
+        }
         if (extraWait) await new Promise(r => setTimeout(r, extraWait));
         // UnknownVizError / empty frames clear once the compositor produces a frame — retry
         let img = null; let lastErr = null;
@@ -1250,73 +1679,211 @@ function runInteractive(captureMode = false) {
     const found = tabForSender(e.sender);
     if (!found) return;
     found.tab.loginForm = !!(info && info.present);
-    // auto-fill this account's own remembered login when its sign-in page appears
-    if (found.tab.loginForm && store.settings.autofill) {
+    if (found.tab.loginForm) {
       const pageUrl = (info && info.url) || found.tab.view.webContents.getURL();
-      if (!originAllowed(found.tab.svc, pageUrl)) {
-        vm.emitState();
-        return; // never auto-type a password into a page that is not the service's own site
-      }
-      const cred = creds.forAccount(found.tab.svc, found.tab.id, pageUrl);
-      if (cred) e.sender.send('fill-credential', { username: cred.username, password: cred.password, submit: false });
+      scheduleAutoFill(found.key, found.tab, pageUrl);
     }
     vm.emitState();
   });
-  ipcMain.on('fill-result', () => {});
+  // Fill outcomes from the account preload (0.9.0: the result was ignored in 0.8.0, so a manual fill
+  // failed silently and an automatic one was invisible). Resolve the awaiting request, and for an
+  // automatic fill raise the banner — "Filled … · Undo" or the honest reason it did not fill.
+  ipcMain.on('fill-result', (e, result) => {
+    const found = tabForSender(e.sender);
+    if (!found) return;
+    const entry = vm.settleFill(found.key, result || {});
+    if (entry && entry.auto) noticeFromAutoFill(found.key, found.tab, entry.credentialId, result || {});
+  });
 
-  ipcMain.handle('fill-login', (_e, key, credentialId = null) => {
+  // ---- auto-fill: plan -> fill -> announce (0.9.0 C) ----
+  // The plan decides everything before anything is typed. It never guesses (D30) and it never fires
+  // for an account whose "never auto-fill" switch is on. Runs a touch after the form report so a
+  // script-rendered SPA form has settled.
+  function scheduleAutoFill(key, tab, pageUrl) {
+    const token = (tab.autoFillToken || 0) + 1;
+    tab.autoFillToken = token;
+    tab.loginPending = { url: pageUrl, at: Date.now() };
+    setTimeout(() => {
+      if (vm.tabs.get(key) !== tab || tab.autoFillToken !== token) return; // slept, recreated, or a newer form report
+      autoFillNow(key, tab, pageUrl).catch(err => console.error('[logins] auto-fill failed:', err.message));
+    }, AUTO_FILL_DELAY_MS);
+  }
+
+  async function autoFillNow(key, tab, pageUrl) {
+    const plan = autoFillPlan(tab.svc, tab.id, pageUrl);
+    if (plan.kind === 'skip') {
+      // The 0.8.0 defect: an ambiguous page did nothing at all, so the user could not tell a missing
+      // login from a broken feature. Ambiguity now raises the chooser banner instead.
+      const existing = tab.notice;
+      if (!existing || existing.kind !== 'choose') vm.setNotice(key, null);
+      return plan;
+    }
+    if (plan.kind === 'choose') {
+      vm.setNotice(key, { kind: 'choose', choices: plan.choices, url: pageUrl });
+      return plan;
+    }
+    const picked = creds.candidatesForAccount(tab.svc, tab.id, pageUrl).find(c => c.id === plan.credentialId);
+    if (!picked) return { kind: 'skip', reason: 'unresolved' };
+    const result = await pushFill(tab, picked, { auto: true });
+    noticeFromAutoFill(key, tab, picked.id, result);
+    return { kind: 'fill', requestId: result.requestId, ok: result.ok, reason: result.reason };
+  }
+
+  function noticeFromAutoFill(key, tab, credentialId, result) {
+    const username = (creds.loadAll().find(c => c.id === credentialId) || {}).username || '';
+    if (result.ok) {
+      vm.setNotice(key, { kind: 'filled', username, credentialId, fillId: result.requestId, fields: { user: !!result.user, password: !!result.password } });
+      return;
+    }
+    const reasons = {
+      'no-form': 'this page shows no sign-in form yet',
+      'no-login': 'nothing is saved for this site yet',
+      'tab-closed': 'the tab closed before the form answered',
+      timeout: 'the page did not answer',
+    };
+    vm.setNotice(key, { kind: 'failed', username, reason: reasons[result.reason] || 'the page had no visible password field' });
+  }
+
+  // Push one credential into a tab and WAIT for the preload's answer, so "filled" is a fact and not
+  // an assumption. The timeout exists because a page can navigate mid-fill.
+  function pushFill(tab, cred, opts = {}) {
+    const requestId = crypto.randomUUID();
+    const p = new Promise(resolve => {
+      const timer = setTimeout(() => {
+        tab.pendingFills.delete(requestId);
+        resolve({ ok: false, reason: 'timeout' });
+      }, FILL_TIMEOUT_MS);
+      tab.pendingFills.set(requestId, { resolve, timer, auto: !!opts.auto, credentialId: cred.id });
+    });
+    try {
+      tab.view.webContents.send('fill-credential', {
+        requestId, username: cred.username, password: cred.password, submit: !!opts.submit,
+      });
+    } catch (err) {
+      tab.pendingFills.delete(requestId);
+      return Promise.resolve({ ok: false, reason: 'send-failed' });
+    }
+    return p;
+  }
+
+  ipcMain.handle('fill-login', async (_e, key, credentialId = null) => {
     const t = vm.tabs.get(key);
-    if (!t) throw new Error('That tab is asleep — open it first');
+    if (!t) return { ok: false, reason: 'asleep', message: 'That tab is asleep — open it first.' };
     const [svc, id] = key.split('::');
     const pageUrl = t.view.webContents.getURL();
     if (!originAllowed(svc, pageUrl)) {
-      throw new Error(`This tab is on ${creds.hostOf(pageUrl) || 'another site'}, not ${serviceHosts(svc)[0] || 'the service'} — refusing to fill a saved password here`);
+      return {
+        ok: false, reason: 'foreign-host',
+        message: `This tab is on ${creds.hostOf(pageUrl) || 'another site'}, not ${serviceHosts(svc)[0] || 'the service'} — refusing to fill a saved password here.`,
+      };
     }
-    if (!creds.candidatesForAccount(svc, id, pageUrl).length) throw new Error('No saved login for this account yet — sign in once and it will be remembered');
-    const candidates = creds.candidatesForAccount(svc, id, pageUrl);
-    if (!candidates.length) throw new Error('No saved login matches this account and site');
+    const { candidates } = fillCandidatesFor(svc, id, pageUrl);
+    if (!candidates.length) {
+      return { ok: false, reason: 'no-login', message: `No saved login for this ${svcOfName(svc)} account yet — sign in once, or import your passwords.` };
+    }
     // The user may have navigated since the chooser was rendered. Recompute from the LIVE URL;
     // if the picked id no longer belongs here, return fresh summaries instead of persisting a stale default.
     if (credentialId && !candidates.some(c => c.id === credentialId)) {
-      return { choose: creds.candidateSummariesForAccount(svc, id, pageUrl) };
+      return { choose: summariesOf(candidates, svc, id) };
     }
-    const cred = creds.credentialForAccount(svc, id, pageUrl, credentialId || null);
-    if (!cred) return { choose: creds.candidateSummariesForAccount(svc, id, pageUrl) };
-    if (credentialId) creds.setDefaultForAccount(credentialId, svc, id, pageUrl); // remember only a live-host candidate
-    t.view.webContents.send('fill-credential', { username: cred.username, password: cred.password, submit: false });
-    return { filled: cred.username };
+    const cred = resolveAmong(candidates, accountKey(svc, id), credentialId || null);
+    if (!cred) return { choose: summariesOf(candidates, svc, id) };
+    if (credentialId) { useAsDefault(svc, id, credentialId); vm.emitState(); } // only a candidate of this account + this service
+    const result = await pushFill(t, cred, { submit: false });
+    if (result.ok) {
+      vm.setNotice(key, { kind: 'filled', username: cred.username, credentialId: cred.id, fillId: result.requestId, fields: { user: !!result.user, password: !!result.password } });
+      return { ok: true, filled: cred.username, requestId: result.requestId };
+    }
+    const messages = {
+      'no-form': 'No sign-in form is visible on this page. Sign in once here and it will be filled next time.',
+      'tab-closed': 'The tab closed before the form answered.',
+      timeout: 'The page did not answer — it may have navigated while filling.',
+    };
+    return { ok: false, reason: result.reason, message: messages[result.reason] || 'This page has no visible password field to fill.' };
   });
   ipcMain.handle('creds-stats', () => creds.stats());
   ipcMain.handle('creds-browsers', () => creds.listChromiumProfiles().map(p => ({ browser: p.browser, profile: p.profile, id: p.loginData })));
   ipcMain.handle('creds-import-browser', async (_e, id) => {
     const p = creds.listChromiumProfiles().find(x => x.loginData === id);
     if (!p) throw new Error('Browser profile not found');
-    return creds.importFromChromium(p);
+    const r = await creds.importFromChromium(p);
+    vm.emitState();
+    return r;
   });
   ipcMain.handle('creds-import-csv', async () => {
     const { dialog } = require('electron');
     const r = await dialog.showOpenDialog({ title: 'Import passwords from CSV', filters: [{ name: 'CSV', extensions: ['csv'] }], properties: ['openFile'] });
     if (r.canceled || !r.filePaths[0]) return null;
-    return creds.importFromCsv(r.filePaths[0]);
+    const res = creds.importFromCsv(r.filePaths[0]);
+    vm.emitState();
+    return res;
   });
-  ipcMain.handle('creds-clear', () => creds.clearAll());
+  ipcMain.handle('creds-clear', () => { creds.clearAll(); vm.emitState(); return true; });
   ipcMain.handle('creds-for-account', (_e, svc, id) => {
     const svcCfg = serviceByKey(svc);
     const c = creds.credentialForAccount(svc, id, svcCfg && svcCfg.loginUrl);
     return c ? { username: c.username, host: c.host, source: c.source } : null; // never the password
   });
-  // Credential manager: summaries only, never passwords — the renderer must not hold one.
-  // Imported passwords are classified by host so the manager can filter/group them per service.
-  ipcMain.handle('creds-list', () => creds.listCredentials().map(c => {
-    const accountSvc = c.accountKey ? c.accountKey.split('::')[0] : null;
-    const serviceKeys = accountSvc ? [accountSvc] : allServices()
-      .filter(s => serviceHosts(s.key).some(h => creds.hostRelated(c.host, h)))
-      .map(s => s.key);
-    return { ...c, serviceKeys };
+  // Per-account "Logins" list for the gear modal and the rail badge: summaries only, never passwords.
+  ipcMain.handle('creds-account-list', (_e, svc, id) => ({
+    logins: accountLoginSummaries(svc, id),
+    signInUrl: (serviceByKey(svc) || {}).loginUrl || null,
   }));
+  // Credential manager: summaries only, never passwords — the renderer must not hold one.
+  // Imported passwords are classified by host, with the accounts each row can serve, so the manager
+  // filters and the ★ markers both come from the main process (the only authority on them).
+  ipcMain.handle('creds-list', () => managerRows());
   ipcMain.handle('creds-default', (_e, credentialId, svc, id, hostHint) =>
-    creds.setDefaultForAccount(credentialId, svc, id, hostHint));
-  ipcMain.handle('creds-delete', (_e, credentialId) => creds.deleteCredential(credentialId));
+    setOrClearDefault(credentialId, svc, id, hostHint));
+  ipcMain.handle('creds-delete', (_e, credentialId) => {
+    const ok = creds.deleteCredential(credentialId);
+    vm.emitState();
+    return { ok, rows: managerRows() };
+  });
+  // Per-account "never auto-fill" switch (0.9.0 C). Stored on the account, default off — the global
+  // Auto-fill toggle stays the master and this can only subtract from it, never add.
+  ipcMain.handle('account-no-autofill', (_e, svc, id, value) => {
+    const acc = findAccount(svc, id);
+    if (!acc) throw new Error('unknown account');
+    acc.noAutoFill = !!value;
+    store.save();
+    vm.emitState();
+    return acc.noAutoFill;
+  });
+  // Dismiss the per-tab notice (banner X).
+  ipcMain.handle('dismiss-notice', (_e, key) => { vm.setNotice(key, null); return true; });
+  // Undo an auto-fill: the preload clears exactly what it filled and answers with what it cleared.
+  // The undo has its own requestId for routing; `fillId` names the fill it is undoing, so a stale
+  // Undo (or one aimed at a different fill) is refused by the page instead of clearing live fields.
+  ipcMain.handle('undo-fill', async (_e, key) => {
+    const t = vm.tabs.get(key);
+    if (!t) return { ok: false, reason: 'asleep' };
+    const notice = t.notice;
+    if (!notice || notice.kind !== 'filled' || !notice.fillId) return { ok: false, reason: 'no-notice' };
+    const requestId = crypto.randomUUID();
+    const result = await new Promise(resolve => {
+      const timer = setTimeout(() => { t.pendingFills.delete(requestId); resolve({ ok: false, reason: 'timeout' }); }, FILL_TIMEOUT_MS);
+      t.pendingFills.set(requestId, { resolve, timer, auto: false });
+      t.view.webContents.send('clear-filled', { requestId, fillId: notice.fillId });
+    });
+    if (result.ok) vm.setNotice(key, null);
+    return result;
+  });
+  // The chooser a notice offers: same resolution path as a manual fill, then dismiss the banner.
+  ipcMain.handle('notice-choose', async (_e, key, credentialId) => {
+    const t = vm.tabs.get(key);
+    if (!t) return { ok: false, reason: 'asleep' };
+    const [svc, id] = key.split('::');
+    const pageUrl = t.view.webContents.getURL();
+    const { candidates } = fillCandidatesFor(svc, id, pageUrl);
+    const picked = candidates.find(c => c.id === credentialId);
+    if (!picked) return { ok: false, reason: 'stale' };
+    useAsDefault(svc, id, picked.id);
+    vm.emitState();
+    const result = await pushFill(t, picked, { submit: false });
+    if (result.ok) vm.setNotice(key, { kind: 'filled', username: picked.username, credentialId: picked.id, fillId: result.requestId, fields: { user: !!result.user, password: !!result.password } });
+    return result.ok ? { ok: true, filled: picked.username } : { ok: false, reason: result.reason };
+  });
   // ---------- Phase 3: service plugins (JSON manifests) ----------
   ipcMain.handle('plugins-list', () => ({
     dir: plugins.pluginsDir(),
@@ -1498,6 +2065,14 @@ function runInteractive(captureMode = false) {
   });
 }
 
+// Test-only exports (used by the smoke modes). These are the exact functions the IPC handlers above
+// call — smoke proves the real projection, not a copy of it.
+module.exports = {
+  accountLoginSummaries, managerRows, setOrClearDefault, resolveAmong, fillCandidatesFor, autoFillPlan,
+  originAllowed, accountKey,
+  _creds: creds,
+};
+
 function cycleTab(vm, dir) {
   const keys = [...vm.tabs.keys()];
   if (!keys.length) return;
@@ -1522,7 +2097,7 @@ if (!gotLock) {
     const [w] = BaseWindow.getAllWindows();
     if (w) { if (w.isMinimized()) w.restore(); w.focus(); }
   });
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     // --print-paths: where does this build keep its data? (support + rename verification)
     if (process.argv.includes('--print-paths')) {
       console.log(JSON.stringify({
@@ -1534,6 +2109,24 @@ if (!gotLock) {
       return app.exit(0);
     }
     store.load();
+    // --seed-demo-logins: placeholder accounts + logins, for screenshots of a scratch profile only.
+    // Requires MAM_USER_DATA (a scratch dir): it must never touch the real profile.
+    if (process.argv.includes('--seed-demo-logins')) {
+      if (!process.env.MAM_USER_DATA) {
+        console.error('[demo] --seed-demo-logins refuses to run without MAM_USER_DATA — point it at a scratch profile');
+        return app.exit(2);
+      }
+      // Wait for safeStorage to become ready before touching credentials.js. On this machine the
+      // OS key is not available during app.whenReady() yet (credentials.js checks
+      // isEncryptionAvailable()); a listCredentials() call before that answers [] and caching that
+      // empty answer is exactly how the manager could show "0 stored" for a full profile.
+      const { safeStorage } = require('electron');
+      const deadline = Date.now() + 8000;
+      while (!safeStorage.isEncryptionAvailable() && Date.now() < deadline) await new Promise(r => setTimeout(r, 100));
+      console.log(`[demo] safeStorage available: ${safeStorage.isEncryptionAvailable()}`);
+      seedDemoLogins();
+      if (!process.argv.includes('--capture')) return app.exit(0);
+    }
     if (process.argv.includes('--spike')) runSpike().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke')) runSmoke().catch(err => { console.error(err); app.exit(1); });
     else if (process.argv.includes('--smoke-restore')) runSmokeRestore().catch(err => { console.error(err); app.exit(1); });

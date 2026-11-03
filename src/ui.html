@@ -102,6 +102,8 @@
     .acct .badge { font-size:10px; padding:1px 5px; border-radius:4px; background:#0006; color:var(--muted); flex:none; }
     .acct .badge.live { color:var(--ok); }
     .acct .badge.signin { color:var(--warn); }
+    .acct .badge.savedkey { display:inline-flex; align-items:center; color:var(--accent); background:transparent; padding:0; }
+    .acct .badge.savedkey svg { width:11px; height:11px; }
     /* hidden actions must not reserve space, or account names truncate needlessly */
     .acts { display:none; align-items:center; gap:2px; flex:none; }
     .acct:hover .acts, .acct.active .acts { display:flex; }
@@ -126,6 +128,20 @@
     .svcgroup.flash { outline:2px solid var(--accent); outline-offset:6px; border-radius:8px; transition:outline-color .6s; }
 
     #content { position:relative; flex:1; min-width:0; }
+    /* ---------- auto-fill notice strip (0.9.0) ---------- */
+    /* Height must equal BANNER_H in src/main.js: the account view is pushed down by exactly this. */
+    #infobar { position:absolute; left:0; right:0; top:0; height:52px; z-index:5; display:flex; align-items:center; gap:var(--s2);
+               padding:0 var(--s4); background:var(--panel2); border-bottom:1px solid var(--border); }
+    #infobar .ic { color:var(--accent); flex:none; display:flex; }
+    #infobar .msg { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+    #infobar .msg b { font-weight:600; }
+    #infobar .msg .why { color:var(--muted); }
+    #infobar button { flex:none; padding:6px 10px; font-size:11px; }
+    #infobar .chips { display:flex; gap:6px; overflow-x:auto; }
+    #infobar .chips button { border:1px solid var(--border); border-radius:12px; padding:3px 10px; background:var(--panel); color:var(--text); }
+    #infobar .chips button:hover { border-color:var(--accent); }
+    #infobar .chips .who { color:var(--muted); }
+    #infobar .acts { display:flex; align-items:center; gap:6px; flex:none; }
     #home { position:absolute; inset:0; overflow-y:auto; padding:var(--s5); }
     #home h2 { font-size:15px; font-weight:600; margin-bottom:var(--s1); }
     #home .sub { color:var(--muted); margin-bottom:var(--s5); display:flex; align-items:center; gap:var(--s2); flex-wrap:wrap; }
@@ -155,6 +171,8 @@
     #modal-back { position:absolute; inset:0; background:#000a; display:flex; align-items:center; justify-content:center; z-index:20; }
     #modal { width:370px; max-height:90%; overflow-y:auto; background:var(--panel); border:1px solid #3a445c;
              border-radius:12px; padding:var(--s4); }
+    /* Only the saved-logins manager is wide (0.9.0): every other modal keeps the 370 px form layout. */
+    #modal.wide { width:560px; }
     #modal h3 { font-size:14px; margin-bottom:var(--s2); }
     #modal label { display:block; color:var(--muted); font-size:11px; margin:10px 0 4px; }
     #modal input[type=text], #modal input[type=password] { width:100%; background:var(--panel2); border:1px solid var(--border);
@@ -171,19 +189,47 @@
     #modal select { width:100%; background:var(--panel2); border:1px solid var(--border); color:var(--text);
                    border-radius:7px; padding:7px 9px; font:inherit; }
     #modal select:focus { border-color:var(--accent); outline:none; }
-    #modal .cred-filter { max-width:280px; margin-bottom:var(--s3); }
     #modal .credgroup { margin-top:var(--s3); }
     #modal .credgroup h4 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:var(--s1); }
-    .credrow { display:flex; align-items:center; gap:var(--s2); padding:var(--s2); border:1px solid var(--border);
-               border-radius:8px; margin-bottom:var(--s1); background:var(--panel2); }
-    .credidentity { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
-    .credidentity strong { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .credidentity span { color:var(--muted); font-size:11px; }
-    .creddefault { color:var(--ok); }
-    .creddefaultctl { display:flex; gap:var(--s1); align-items:center; }
-    .creddefaultctl select { width:170px; }
-    .creddefaultctl button { flex:none; padding:6px 9px; font-size:11px; }
-    .creddelete { flex:none; padding:6px 9px; font-size:11px; }
+    /* Manager rows are a GRID, not one flex line: identity | default control | actions. Every cell
+       aligns at its top, so a 4-line identity can never leave the controls floating mid-height, and
+       the fixed control column keeps every row the same shape. (The 0.8.0 flex row put a 170 px
+       select and two buttons beside a stacked identity column — the malformed window.) */
+    .credrow { display:grid; grid-template-columns:minmax(0,1fr) 176px auto; gap:var(--s3) var(--s2);
+               align-items:start; padding:var(--s3); border:1px solid var(--border);
+               border-radius:8px; margin-bottom:var(--s2); background:var(--panel2); }
+    .credidentity { min-width:0; display:flex; flex-direction:column; gap:2px; }
+    .credidentity strong { font-size:12px; overflow-wrap:anywhere; } /* usernames wrap, never ellipsize */
+    .credidentity span { color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+    .credidentity .creddefault { color:var(--ok); margin-top:2px; }
+    .creddefaultctl { display:flex; flex-direction:column; gap:6px; padding-top:1px; }
+    .creddefaultctl select { width:100%; }
+    .creddefaultctl button { padding:6px 9px; font-size:11px; }
+    .credactions { display:flex; flex-direction:column; gap:6px; padding-top:1px; }
+    .credactions button { padding:6px 9px; font-size:11px; }
+    .creddelete { color:var(--muted); }
+    .creddelete:hover { color:#fff; background:#7f2b2b; }
+    /* account-filter chips: All / every service with a login / every account with a login */
+    .credchips { display:flex; flex-wrap:wrap; gap:6px; margin:var(--s2) 0 var(--s3); }
+    .credchips button { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 10px; border:1px solid var(--border);
+                        border-radius:13px; background:var(--panel2); color:var(--muted); font-size:11px; }
+    .credchips button:hover { border-color:var(--accent); color:var(--text); }
+    .credchips button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .credchips .dot { width:7px; height:7px; }
+    /* per-account Logins list in the gear modal */
+    .acctlogins { border:1px solid var(--border); border-radius:9px; overflow:hidden; margin-top:4px; }
+    .acctlogin { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px var(--s2); align-items:start;
+                 padding:8px 10px; background:var(--panel2); border-top:1px solid var(--border); }
+    .acctlogin:first-child { border-top:0; }
+    .acctlogin .who { font-size:12px; overflow-wrap:anywhere; }
+    .acctlogin .meta { color:var(--muted); font-size:11px; grid-column:1; overflow-wrap:anywhere; }
+    .acctlogin .star { color:var(--ok); }
+    .acctlogin .acts { grid-row:1 / span 2; grid-column:2; align-self:center; display:flex; }
+    .acctlogin button { padding:5px 9px; font-size:11px; }
+    .acctlogin.empty { display:block; color:var(--muted); font-size:11px; padding:10px; }
+    .switcher { display:flex; align-items:center; gap:var(--s2); margin-top:var(--s3); }
+    .switcher input { width:auto; }
+    .switcher label { margin:0; color:var(--text); font-size:12px; }
     [hidden] { display:none !important; }
     @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
   </style>
@@ -212,6 +258,7 @@
       <div id="railfoot"></div>
     </div>
     <div id="content">
+      <div id="infobar" hidden></div>
       <div id="home"></div>
       <div id="modal-back" hidden><div id="modal"></div></div>
     </div>
