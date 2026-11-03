@@ -22,7 +22,6 @@ const firefoxImport = require('./firefox-import');
 
 function credsFile() { return path.join(app.getPath('userData'), 'credentials.json'); }
 function credKeyFile() { return path.join(app.getPath('userData'), 'credkey'); }
-function legacyBackupFile() { return path.join(app.getPath('userData'), 'credentials.v1-unreadable.json'); }
 
 // ---------- encrypted store (v2, 0.13.0) ----------
 // The store used to be encrypted with safeStorage (DPAPI). On this machine DPAPI's key is per-PROCESS:
@@ -93,7 +92,7 @@ function encryptStore(list) {
 // corrupted ciphertext OR tag is refused instead of being handed back as mangled plaintext.
 function decryptStore(raw) {
   const key = readCredKey();
-  if (!key) throw Object.assign(new Error('the store key (credkey) is missing'), { code: 'NO_KEY' });
+  if (!key) throw Object.assign(new Error('the saved-login key file is missing — re-import your logins once and they will work from here on'), { code: 'NO_KEY' });
   const iv = Buffer.from(String(raw.iv || ''), 'base64');
   const tag = Buffer.from(String(raw.tag || ''), 'base64');
   const ct = Buffer.from(String(raw.ct || ''), 'base64');
@@ -137,7 +136,9 @@ function normalizeList(decoded) {
 function loadAll() {
   lastLoadError = null;
   let raw;
-  try { raw = JSON.parse(fs.readFileSync(credsFile(), 'utf8')); } catch { return []; } // no store yet
+  if (!fs.existsSync(credsFile())) return []; // no store yet
+  try { raw = JSON.parse(fs.readFileSync(credsFile(), 'utf8')); }
+  catch { return storeError('MALFORMED', 'the store file is damaged'); } // an existing file that does not parse is damage, not "no store yet"
   if (!raw || typeof raw !== 'object') return [];
 
   if (raw.v === STORE_V2) {
@@ -180,11 +181,10 @@ function saveAll(list) {
     if (!c.id) c.id = crypto.randomUUID();
     if (!Array.isArray(c.defaultForAccounts)) c.defaultForAccounts = [];
   }
-  // A v1 store that could not be read is preserved under its own name before v2 takes over the path:
-  // a re-import is the recovery, but losing the old bytes silently would not be honest.
-  if (legacyState.unreadable && legacyState.key === legacySignature().key) {
-    try { fs.copyFileSync(credsFile(), legacyBackupFile()); } catch {}
-  }
+  // An unreadable v1 store is left EXACTLY as it is (byte-identical) and the app says so; the
+  // recovery is a one-time re-import. No copy is made: a second secret-bearing file next to the
+  // key would only give a backup/sync/support tool one more place to grab the same passwords
+  // with less protection, and on the machine this fix targets the original is unreadable anyway.
   writeStoreFile(encryptStore(list));
   legacyState = { key: '', unreadable: false };
   lastLoadError = null;
@@ -625,7 +625,6 @@ function stats() {
 
 function clearAll() {
   try { fs.rmSync(credsFile(), { force: true }); } catch {}
-  try { fs.rmSync(legacyBackupFile(), { force: true }); } catch {}
   legacyState = { key: '', unreadable: false };
   lastLoadError = null;
   return true;

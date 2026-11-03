@@ -1637,7 +1637,8 @@ async function runSmokeCreds() {
     // (4) an UNREADABLE v1 store: the broken case the owner hit. Simulated with a wrong-key v1 blob
     // (a real safeStorage ciphertext from another key cannot be produced honestly here). The file must
     // be left byte-identical, the app must show ONE honest notice, and an import must still work and
-    // switch the store to v2 (with the old bytes preserved under their own name).
+    // switch the store to v2 (0.13.1: no copy of the old bytes is made anywhere — a second
+    // secret-bearing file next to the key would only hand backup/support tools another grab).
     {
       const wrongKeyBlob = crypto.randomBytes(96).toString('base64'); // not a DPAPI blob at all
       const v1Unreadable = JSON.stringify({ ct: wrongKeyBlob, count: 7, savedAt: '2026-01-04T00:00:00.000Z' }, null, 2);
@@ -1656,11 +1657,21 @@ async function runSmokeCreds() {
       fs.writeFileSync(csvRe, 'url,username,password\nhttps://vercel.com/login,reimport@example.com,reimport-pw\n');
       try { creds.importFromCsv(csvRe); } finally { try { fs.rmSync(csvRe, { force: true }); } catch {} }
       const afterReimport = creds.storeState();
+      const backupAbsent = !fs.existsSync(path.join(app.getPath('userData'), 'credentials.v1-unreadable.json'));
       check('store-v1-unreadable-clears-after-a-reimport',
         afterReimport.legacyUnreadable === false && afterReimport.notice === null
-          && creds.stats().total === 1 && readStore().v === 2
-          && fs.existsSync(path.join(app.getPath('userData'), 'credentials.v1-unreadable.json')),
-        `notice=${afterReimport.notice} rows=${creds.stats().total} format=v${readStore().v} backup=${fs.existsSync(path.join(app.getPath('userData'), 'credentials.v1-unreadable.json'))}`);
+          && creds.stats().total === 1 && readStore().v === 2 && backupAbsent,
+        `notice=${afterReimport.notice} rows=${creds.stats().total} format=v${readStore().v} no-backup-file=${backupAbsent}`);
+      // 0.13.1: a file that EXISTS but does not parse is damage, not "no store yet" — it is
+      // reported (MALFORMED), never silently treated as an empty list.
+      {
+        fs.writeFileSync(storeFile, '{ truncated');
+        const malformed = creds.storeState();
+        check('store-v2-malformed-file-reported',
+          malformed.error && malformed.error.code === 'MALFORMED' && creds.stats().total === 0,
+          `error=${malformed.error && malformed.error.code} rows=${creds.stats().total}`);
+        fs.rmSync(storeFile, { force: true });
+      }
     }
 
     // (5) THE regression proof: two REAL launches on ONE scratch profile. Launch A seeds a login and
@@ -1669,7 +1680,6 @@ async function runSmokeCreds() {
     {
       fs.rmSync(keyFile, { force: true });
       fs.rmSync(storeFile, { force: true });
-      fs.rmSync(path.join(app.getPath('userData'), 'credentials.v1-unreadable.json'), { force: true });
       fs.rmSync(path.join(app.getPath('userData'), 'cross-process-seed.json'), { force: true });
       fs.rmSync(path.join(app.getPath('userData'), 'cross-process-read.json'), { force: true });
       const run = args => new Promise(resolve => {

@@ -1,6 +1,6 @@
 {
   "name": "my-provider-dash-manager",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "CLI to install and update My Provider Dash Manager: a free Windows desktop app that keeps many accounts per service (Vercel, Netlify, Supabase, Cloudflare, AWS, Google, Microsoft, GitHub, Gmail) signed in at once, each in a fully isolated session. Also available as mpdm.",
   "main": "src/main.js",
   "scripts": {

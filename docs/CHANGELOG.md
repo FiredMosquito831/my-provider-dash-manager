@@ -2,6 +2,19 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.13.1 — 2026-11-03
+
+### Fixed
+- **A leftover copy of an unreadable older login store is no longer written.** The 0.13.0 "could not
+  read the old store" path kept a second copy of that store next to the new encrypted one; the review
+  of the shipped code found that copy adds no recovery value on the machine it targets and gives
+  backup/support tools one more place to grab the same passwords. The original file is still left
+  byte-identical and the honest notice is unchanged — the copy is gone.
+- **A damaged store file is reported as damage**, not quietly treated as an empty list.
+- **The "key file missing" message now says re-import once** instead of suggesting you go looking for
+  a key backup.
+- New checks: the no-copy behaviour and the damaged-file report are both pinned in `smoke:creds`.
+
 ## 0.13.0 — 2026-11-03
 
 ### Fixed
