@@ -332,8 +332,11 @@ function acctRow(a) {
     ? `<button class="act" data-fill="${esc(a.key)}" title="Fill this account's saved login into the page" aria-label="Fill login">${icon('key')}</button>` : '';
   // "Has saved login" indicator: visible while the row is not hovered, so a sleeping account still
   // tells you a password exists for it (0.8.0 showed nothing until a live tab was open).
+  // 0.12.1: it is a BUTTON, not a dead indicator — pressing it opens this account's logins window
+  // (the gear modal's "Saved logins for this account" section, with Use on every row). The rail's
+  // click handler already routes [data-gear] to openEditModal before the row-open path.
   const keyBadge = a.loginCount
-    ? `<span class="badge savedkey" title="${a.loginCount} saved login${a.loginCount === 1 ? '' : 's'} for this account — open Manage to see them">${icon('key')}</span>` : '';
+    ? `<button class="badge savedkey" data-gear="${esc(a.key)}" title="${a.loginCount} saved login${a.loginCount === 1 ? '' : 's'} for this account — click to see and use them" aria-label="Show saved logins">${icon('key')}</button>` : '';
   return `<div class="acct ${isActive ? 'active' : ''} ${tab ? 'open' : ''}" data-row="${esc(a.key)}" title="${esc(a.label)}">
     <span class="dot" style="background:${colorOf(a.colorIdx, a.svc)}"></span>
     <span class="aname">${esc(a.label)}</span>

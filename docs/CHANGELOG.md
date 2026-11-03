@@ -2,6 +2,13 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.12.1 — 2026-11-03
+
+### Fixed
+- **The key icon on an account row in the left rail was a dead indicator** — pressing it did
+  nothing (the tooltip even said "open Manage to see them"). It is now a button: pressing it opens
+  that account's logins window (the same one the gear opens), with Use / Copy on every row.
+
 ## 0.12.0 — 2026-11-03
 
 ### Added
