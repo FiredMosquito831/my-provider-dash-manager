@@ -349,6 +349,123 @@ function autoFillPlan(svc, id, url, opts = {}) {
   return { kind: 'skip', reason: choices.length ? 'unresolved' : 'no-login' };
 }
 
+// ---------- per-account content settings (0.11.0) ----------
+// Ad-block and dark mode have ONE app-wide toggle each (Home) and were read from store.settings at
+// every apply site. An account may now carry a sparse `contentOverride: { adBlock?: 'on'|'off',
+// darkMode?: 'on'|'off' }`: ONLY the keys the user changed exist, so an untouched account's stored
+// record is byte-identical to before (measured: the sparse shape is the only one that round-trips
+// byte-identically; `{}` and null-filled shapes leave bytes behind). 'follow' is encoded as the
+// ABSENT key, which is what updateContentOverride() enforces.
+const CONTENT_NAMES = ['adBlock', 'darkMode'];
+const CONTENT_VALUES = ['on', 'off', 'follow'];
+
+// Modelled on autoFillPlan: pure, dependency-injected via `settings`, exported for smoke. The
+// follow branch is derived from settings[name] — never a hardcoded default — so a future change to
+// the app-wide default flows through every untouched account with no code change here.
+function resolveContent(acc, name, settings) {
+  const v = acc && acc.contentOverride ? acc.contentOverride[name] : undefined;
+  if (v === 'on') return true;
+  if (v === 'off') return false;
+  return !!(settings || store.settings)[name];
+}
+// Sparse write: set the key when overridden, DELETE it on 'follow', and delete the whole object when
+// it becomes empty. Nothing is written when the value is unchanged (so a no-op save touches no bytes).
+function updateContentOverride(acc, name, value) {
+  if (!CONTENT_NAMES.includes(name)) throw new Error(`unknown content setting: ${name}`);
+  if (!CONTENT_VALUES.includes(value)) throw new Error(`invalid content value: ${value}`);
+  if (value === 'follow') {
+    if (acc.contentOverride) { delete acc.contentOverride[name]; if (!Object.keys(acc.contentOverride).length) delete acc.contentOverride; }
+    return;
+  }
+  if (!acc.contentOverride) acc.contentOverride = {};
+  acc.contentOverride[name] = value;
+}
+function contentOverrideFor(acc) {
+  return { adBlock: !!(acc && acc.contentOverride && acc.contentOverride.adBlock), darkMode: !!(acc && acc.contentOverride && acc.contentOverride.darkMode) };
+}
+
+// The two per-view react sites, in ONE place so the global toggle and a per-account override change
+// cannot drift apart. `before`/`after` are resolved pairs; only a control whose value MOVED is acted
+// on, so a tab that resolves the same is untouched (the equality bar for un-overridden accounts):
+//   - dark: enable/disable in that view's isolated world, no reload (measured: it restores exactly).
+//   - adBlock -> on: the network predicate is already live through its per-request closure, so only
+//     the cosmetic CSS needs re-applying.
+//   - adBlock -> off: injected CSS cannot be retracted (src/content.js is frozen and applyToPage
+//     discards its insertCSS key), so that ONE view reloads. Never any other view.
+function applyContentChange(t, before, after) {
+  const wc = t.view.webContents;
+  if (!wc || wc.isDestroyed() || !before) return;
+  if (before.darkMode !== after.darkMode) { if (after.darkMode) dark.enable(wc); else dark.disable(wc); }
+  if (before.adBlock !== after.adBlock) {
+    if (after.adBlock) content.applyToPage(wc, { adBlock: true });
+    else wc.reload();
+  }
+}
+
+// The did-finish-load apply for ONE document. A fresh document has no dark engine yet, so "off"
+// needs no disable call; the cosmetic layer is applied only when resolved on (applyToPage itself
+// also skips managed dashboards, invariant 5 — unchanged).
+function applyContentToFreshDocument(wc, acc) {
+  content.applyToPage(wc, { adBlock: resolveContent(acc, 'adBlock', store.settings) });
+  if (resolveContent(acc, 'darkMode', store.settings)) dark.enable(wc);
+}
+// Re-resolve every live tab and act only where the value moved. `snapshot` maps tab key -> resolved
+// pair captured BEFORE the change; a tab with no snapshot is left alone (it was created inside this
+// same change, and its own did-finish-load path already used the new values).
+function reactToContentChange(vm, snapshot) {
+  for (const t of vm.tabs.values()) {
+    const acc = findAccount(t.svc, t.id);
+    const after = { adBlock: resolveContent(acc, 'adBlock', store.settings), darkMode: resolveContent(acc, 'darkMode', store.settings) };
+    applyContentChange(t, snapshot.get(accountKey(t.svc, t.id)), after);
+  }
+}
+function contentSnapshot(vm) {
+  const snap = new Map();
+  for (const [key, t] of vm.tabs) {
+    const acc = findAccount(t.svc, t.id);
+    snap.set(key, { adBlock: resolveContent(acc, 'adBlock', store.settings), darkMode: resolveContent(acc, 'darkMode', store.settings) });
+  }
+  return snap;
+}
+
+// The body of the account-content-override IPC, exported so smoke drives the REAL path (the
+// setOrClearDefault precedent). Validates, writes sparse, applies live, emits once.
+function setAccountContentOverride(vm, svc, id, name, value) {
+  const acc = findAccount(svc, id);
+  if (!acc) throw new Error('unknown account');
+  if (!CONTENT_NAMES.includes(name)) throw new Error(`unknown content setting: ${name}`);
+  if (!CONTENT_VALUES.includes(value)) throw new Error(`invalid content value: ${value}`);
+  const snapshot = contentSnapshot(vm);
+  updateContentOverride(acc, name, value);
+  store.save();
+  reactToContentChange(vm, snapshot);
+  vm.emitState();
+  return {
+    value: (acc.contentOverride && acc.contentOverride[name]) || 'follow',
+    override: contentOverrideFor(acc),
+    resolved: { adBlock: resolveContent(acc, 'adBlock', store.settings), darkMode: resolveContent(acc, 'darkMode', store.settings) },
+  };
+}
+
+// The app-wide toggle's body, exported for smoke the same way (set-content-setting delegates here).
+// 0.11.0: capture what every live tab resolves to BEFORE the change, so the reaction can skip any
+// tab whose account overrides the control (its resolved value does not move) — for an account with
+// no override this is exactly today's behaviour, tab for tab.
+function setGlobalContentSetting(vm, name, value) {
+  if (!['adBlock', 'darkMode', 'saveLogins', 'autofill', 'autoUpdate'].includes(name)) throw new Error(`unknown setting: ${name}`);
+  const snapshot = (name === 'darkMode' || name === 'adBlock') ? contentSnapshot(vm) : null;
+  store.settings[name] = !!value;
+  if (name === 'autoUpdate') { store.save(); updater.setAutoUpdate(!!value); vm.emitState(); return !!value; }
+  store.save();
+  if (snapshot) {
+    // dark: one enable/disable call per affected view — no reload. ad-block: cosmetics re-apply on,
+    // and only a view whose RESOLVED value fell to off reloads (injected CSS has no other undo).
+    reactToContentChange(vm, snapshot);
+  }
+  vm.emitState();
+  return store.settings[name];
+}
+
 // ---------- view manager ----------
 class ViewManager {
   constructor() {
@@ -494,7 +611,7 @@ class ViewManager {
       ses.setPermissionRequestHandler((_wc, permission, cb) => cb(ALLOWED.has(permission)));
       ses.setPermissionCheckHandler((_wc, permission, _origin) => ALLOWED.has(permission));
     }
-    content.attachAdBlock(ses, () => !!store.settings.adBlock); // network-level ad/tracker blocking per partition
+    content.attachAdBlock(ses, () => resolveContent(acc, 'adBlock', store.settings)); // per-partition network blocking, resolved PER REQUEST (the account is captured, never scanned — 0.11.0)
     if (acc && acc.proxy) this.applyProxy(view.webContents.session, acc.proxy);
     return view;
   }
@@ -533,14 +650,14 @@ class ViewManager {
       if (input.type === 'keyDown' && input.key === 'Escape' && !this.modalOpen) this.deactivate();
     });
     view.webContents.on('did-finish-load', () => {
-      content.applyToPage(view.webContents, { adBlock: !!store.settings.adBlock });
-      // Enable dark mode once the document's styles exist. did-navigate fires too early: the
-      // dynamic engine finds no stylesheets to transform yet, so enabling there leaves the page
-      // white. This fires again after every cross-origin navigation, which is exactly what the
-      // isolated-world reset requires — the world (and Dark Reader in it) is gone by then and must
-      // be re-injected. Same-document (pushState) routing never reaches here, so it never re-injects.
-      if (store.settings.darkMode) dark.enable(view.webContents);
-      // A full load can land on a different host than did-navigate reported (client-side redirects):
+      // Ad-block cosmetics + dark mode, resolved for THIS account (0.11.0). Enable dark mode once the
+      // document's styles exist: did-navigate fires too early — the dynamic engine finds no
+      // stylesheets to transform yet, so enabling there leaves the page white. This fires again after
+      // every cross-origin navigation, which is exactly what the isolated-world reset requires — the
+      // world (and Dark Reader in it) is gone by then and must be re-injected. Same-document
+      // (pushState) routing never reaches here, so it never re-injects. A fresh document never has an
+      // engine, so "resolved off" needs no disable call.
+      applyContentToFreshDocument(view.webContents, acc);
       // refresh the address strip's key chip from the URL that actually finished loading (0.10.0).
       this.emitState();
     });
@@ -733,6 +850,10 @@ class ViewManager {
         status: statusCache.get(accountKey(a.svc, a.id)) || null,
         loginCount: accountLoginSummaries(a.svc, a.id, loginList).length, // "has saved login" indicator
         noAutoFill: !!a.noAutoFill,
+        // 0.11.0: what each control ACTUALLY resolves to for this account, and whether the account
+        // overrides it — the gear window's worded state and the Home card's marker read these.
+        contentResolved: { adBlock: resolveContent(a, 'adBlock', store.settings), darkMode: resolveContent(a, 'darkMode', store.settings) },
+        contentOverridden: contentOverrideFor(a),
       })), // live registry projection for the home grid (token presence + status summaries; never raw tokens)
       groupTabs: !!store.settings.groupTabs,
       collapsed: store.settings.collapsed || [],
@@ -1475,6 +1596,245 @@ async function runSmokeDark() {
   const bgNav = await bgOf();
   check('re-darkens-after-cross-origin-navigation', !!bgNav && !/255,\s*255,\s*255/.test(bgNav), bgNav);
 
+  // ================= 0.11.0: PER-ACCOUNT CONTENT SETTINGS =================
+  // The nine checks above are the pre-0.11.0 goldens and stay untouched (no assertion edited). This
+  // section is additive: dark overrides (5), ad-block (6 — the first ad-block coverage this suite
+  // has ever had), then the data/API contracts (4).
+  //
+  // Every check runs offline: the dark checks use two local white pages, and the ad-block checks use
+  // a seed-listed ad host that CANNOT resolve. With the blocker on the request dies as
+  // net::ERR_BLOCKED_BY_CLIENT (-20); with it off the same request dies as net::ERR_NAME_NOT_RESOLVED
+  // (-105) — measured on this machine against the repo's real src/content.js before this was written.
+  // The two codes are therefore a real, network-free witness of the network-layer decision.
+  const isDark = bg => !!bg && bg !== '' && !/255,\s*255,\s*255/.test(bg);
+  const isWhite = bg => /255,\s*255,\s*255/.test(bg || '');
+
+  // A fresh account + a fresh white document, loaded through the REAL create path so the real
+  // did-finish-load apply (and the real per-request closure in makeView) is what gets measured.
+  const mk = async (id, url) => {
+    vm.create('vercel', id, url, { show: false });
+    const t = vm.tabs.get(accountKey('vercel', id));
+    // create() calls loadURL without waiting, so either the load is still in flight or it already
+    // finished (a cached file:// page) — never wait for an event that has already fired.
+    if (t.view.webContents.isLoading()) await new Promise(r => t.view.webContents.once('did-finish-load', r));
+    return t;
+  };
+  const bgOfTab = async t => {
+    try { return await t.view.webContents.executeJavaScript(`getComputedStyle(document.documentElement).backgroundColor`); } catch { return ''; }
+  };
+  const engineOf = async t => {
+    try { return await t.view.webContents.executeJavaScriptInIsolatedWorld(dark.DARK_WORLD_ID, [{ code: 'typeof window.DarkReader' }]); } catch { return undefined; }
+  };
+
+  // Reset the registry and the global settings this section depends on, then build a control view
+  // with NO overrides at all (the equality baseline every per-account assertion compares against).
+  store.accounts = store.accounts.filter(a => a.svc !== 'vercel' || !/^x-/.test(a.id));
+  store.settings.darkMode = true; store.settings.adBlock = true;
+  const control = await mk('x-control', toUrl(p1));
+  await sleep(3200);
+  const controlDark = await bgOfTab(control);
+  const controlEngine = await engineOf(control);
+
+  // 1. global ON, A override off, B follows -> A white, B dark.
+  registerAccount('vercel', 'x-a');
+  updateContentOverride(findAccount('vercel', 'x-a'), 'darkMode', 'off');
+  const aOff = await mk('x-a', toUrl(p1));
+  const bFollowOn = await mk('x-b', toUrl(p1));
+  await sleep(3200);
+  const aOffBg = await bgOfTab(aOff); const bOnBg = await bgOfTab(bFollowOn);
+  check('per-account-dark-override-off-while-global-on', isWhite(aOffBg) && isDark(bOnBg), `A=${aOffBg} B=${bOnBg}`);
+
+  // 2. global OFF, A override on, B follows -> A dark, B white (Q2: true override, both directions).
+  store.settings.darkMode = false;
+  const cOff = await mk('x-c', toUrl(p1));
+  registerAccount('vercel', 'x-d');
+  updateContentOverride(findAccount('vercel', 'x-d'), 'darkMode', 'on');
+  const dOn = await mk('x-d', toUrl(p1));
+  await sleep(3200);
+  const cOffBg = await bgOfTab(cOff); const dOnBg = await bgOfTab(dOn);
+  check('per-account-dark-override-on-while-global-off', isDark(dOnBg) && isWhite(cOffBg), `C(global-off)=${cOffBg} D(override-on)=${dOnBg}`);
+
+  // 3. follow-global is byte-for-byte the control view: same computed colour AND same engine presence.
+  store.settings.darkMode = true;
+  const follow = await mk('x-e', toUrl(p1));
+  await sleep(3200);
+  const followBg = await bgOfTab(follow); const followEngine = await engineOf(follow);
+  check('per-account-dark-follow-global',
+    followBg === controlDark && followEngine === controlEngine && followEngine === 'object',
+    `follow=${followBg}/${followEngine} control=${controlDark}/${controlEngine}`);
+
+  // 4. override change applies to the OPEN document with no reload: the h1 keeps an in-page marker
+  //    (a reload would drop it), while the colour returns to white. B (untouched) keeps its colour.
+  await follow.view.webContents.executeJavaScript(`document.querySelector('h1').setAttribute('data-marker','kept')`).catch(() => {});
+  const bBefore4 = await bgOfTab(bFollowOn);
+  setAccountContentOverride(vm, 'vercel', 'x-e', 'darkMode', 'off');
+  await sleep(1800);
+  const marker = await follow.view.webContents.executeJavaScript(`document.querySelector('h1') && document.querySelector('h1').getAttribute('data-marker')`).catch(() => null);
+  const followBg4 = await bgOfTab(follow); const bAfter4 = await bgOfTab(bFollowOn);
+  check('per-account-override-change-applies-without-reload',
+    followBg4 !== '' && isWhite(followBg4) && marker === 'kept' && bAfter4 === bBefore4,
+    `marker=${marker} bg=${followBg4} B before/after=${bBefore4}/${bAfter4}`);
+
+  // 5. an untouched account is unchanged by a sibling's override: compare a following tab with the
+  //    control view created before ANY override existed.
+  const untouched = await mk('x-f', toUrl(p1));
+  await sleep(3200);
+  const untouchedBg = await bgOfTab(untouched); const untouchedEngine = await engineOf(untouched);
+  check('per-account-dark-untouched-account-unchanged',
+    untouchedBg === controlDark && untouchedEngine === controlEngine,
+    `untouched=${untouchedBg}/${untouchedEngine} control=${controlDark}/${controlEngine}`);
+
+  // ---------- ad-block: the offline ERR_BLOCKED_BY_CLIENT / ERR_NAME_NOT_RESOLVED discriminator ----------
+  // A seed-listed ad host whose SUBDOMAIN cannot resolve. hostBlocked() walks parent domains, so it
+  // is blocked by the predicate, while DNS guarantees the "not blocked" answer is a different code.
+  const ADHOST = 'mam011-smoke-no-such-host.doubleclick.net';
+  const frameCode = async t => {
+    const wc = t.view.webContents;
+    const got = await new Promise(resolve => {
+      const seen = [];
+      const onFail = (_e, code, desc, _vurl, isMainFrame) => { if (!isMainFrame) seen.push(desc); };
+      wc.on('did-fail-load', onFail);
+      wc.executeJavaScript(`(() => { const old = document.getElementById('mam-ad-probe'); if (old) old.remove();
+        const f = document.createElement('iframe'); f.id = 'mam-ad-probe';
+        f.src = 'https://${ADHOST}/ad.html'; document.body.appendChild(f); return f.src; })()`).catch(() => {});
+      setTimeout(() => { wc.removeListener('did-fail-load', onFail); resolve(seen); }, 6000);
+    });
+    return got[0] || 'none';
+  };
+  // A fresh document is what makes the check independent of earlier iframes: reload once, then probe.
+  const reloadAndProbe = async t => {
+    const wc = t.view.webContents;
+    await new Promise(r => { wc.once('did-finish-load', r); wc.reload(); });
+    await sleep(600);
+    return frameCode(t);
+  };
+
+  // 6. global ON, A override off, B follows -> A is NOT blocked, B IS blocked.
+  store.settings.adBlock = true;
+  registerAccount('vercel', 'x-g');
+  updateContentOverride(findAccount('vercel', 'x-g'), 'adBlock', 'off');
+  const gOff = await mk('x-g', toUrl(p1));
+  await sleep(800);
+  const gCode = await reloadAndProbe(gOff);
+  const bCode = await reloadAndProbe(bFollowOn);
+  check('per-account-adblock-override-off-while-global-on',
+    gCode === 'ERR_NAME_NOT_RESOLVED' && bCode === 'ERR_BLOCKED_BY_CLIENT', `G(override-off)=${gCode} B(follow)=${bCode}`);
+
+  // 7. global OFF, D override on (D already exists with a dark override), E follows -> D blocked, C not.
+  store.settings.adBlock = false;
+  updateContentOverride(findAccount('vercel', 'x-d'), 'adBlock', 'on');
+  const dCode = await reloadAndProbe(dOn);
+  const cCode2 = await reloadAndProbe(cOff);
+  check('per-account-adblock-override-on-while-global-off',
+    dCode === 'ERR_BLOCKED_BY_CLIENT' && cCode2 === 'ERR_NAME_NOT_RESOLVED', `D(override-on)=${dCode} C(global-off)=${cCode2}`);
+
+  // 8. follow-global: an un-overridden account produces exactly the code the global dictates. With
+  //    the global back on, that is BLOCKED — the same answer the control view would give.
+  store.settings.adBlock = true;
+  const fCode = await reloadAndProbe(follow); // x-e has only a darkMode override: adBlock follows
+  check('per-account-adblock-follow-global', fCode === 'ERR_BLOCKED_BY_CLIENT', `E(follow, global on)=${fCode}`);
+
+  // 9. a LIVE flip changes the next request's outcome with no reload: x-g is overridden off; clearing
+  //    the override (it follows the on global) blocks the SAME host, in the SAME document. A page
+  //    marker proves the document survived — a URL comparison alone would NOT, because a reload keeps
+  //    the URL (mutation 4 caught exactly that: it reloaded on the on-flip and still passed).
+  await gOff.view.webContents.executeJavaScript(`window.__mamFlipMark = 'alive'`).catch(() => {});
+  const urlBefore9 = gOff.view.webContents.getURL();
+  setAccountContentOverride(vm, 'vercel', 'x-g', 'adBlock', 'follow');
+  await sleep(400);
+  const gCodeLive = await frameCode(gOff);
+  const urlAfter9 = gOff.view.webContents.getURL();
+  const flipMark = await gOff.view.webContents.executeJavaScript(`window.__mamFlipMark || 'gone'`).catch(() => 'gone');
+  check('adblock-live-flip-no-reload',
+    gCodeLive === 'ERR_BLOCKED_BY_CLIENT' && urlBefore9 === urlAfter9 && flipMark === 'alive',
+    `after=${gCodeLive} url ${urlBefore9 === urlAfter9 ? 'unchanged' : 'CHANGED'} document=${flipMark}`);
+
+  // 10. cosmetic per account: applyToPage hides the ad slot for an on-account and leaves it for an
+  //     off-account. The seed list carries no generic cosmetics (they come from a fetched EasyList),
+  //     so the check installs ONE known selector into the live filter set for the duration of the
+  //     assertion and restores it in a finally — the module's bytes are untouched (it is frozen), and
+  //     the check then measures the real did-finish-load apply for two accounts that resolve
+  //     differently. `display:none` vs `display:block` is the observable.
+  const cosFile = path.join(app.getPath('temp'), 'mam-content-cosmetic.html');
+  fs.writeFileSync(cosFile, '<!doctype html><html><head><style>#ad-slot{display:block;height:10px;width:10px}</style></head><body><div id="ad-slot"></div><h1>probe</h1></body></html>');
+  const savedCosmetic = content.filters.cosmetic;
+  content.filters.cosmetic = ['#ad-slot'];
+  let cosOn = ''; let cosOff = ''; let cosOffTab = null;
+  try {
+    const onT = await mk('x-h', toUrl(cosFile));
+    await sleep(900);
+    cosOn = await onT.view.webContents.executeJavaScript(`getComputedStyle(document.getElementById('ad-slot')).display`).catch(() => '');
+    registerAccount('vercel', 'x-i');
+    updateContentOverride(findAccount('vercel', 'x-i'), 'adBlock', 'off');
+    const offT = await mk('x-i', toUrl(cosFile));
+    await sleep(900);
+    cosOff = await offT.view.webContents.executeJavaScript(`getComputedStyle(document.getElementById('ad-slot')).display`).catch(() => '');
+    cosOffTab = offT; // used by check 11 below
+  } finally { content.filters.cosmetic = savedCosmetic; }
+  check('adblock-cosmetic-per-account', cosOn === 'none' && cosOff === 'block',
+    `following(adBlock on)=${cosOn} overridden-off=${cosOff}`);
+
+  // 11. a reload caused by ANOTHER account's ad-block change never reaches this account's document.
+  //     Toggling the GLOBAL off and back on makes every FOLLOWING account's resolved value move
+  //     (off, then on: the "on" half re-applies cosmetics, the "off" half reloads), while x-i is
+  //     overridden off and resolves `false` at both points — so it must not reload. A page-global
+  //     marker survives a non-reload and dies on a reload.
+  const offTab = cosOffTab;
+  await gOff.view.webContents.executeJavaScript(`window.__mamMark = 'alive'`).catch(() => {});
+  await offTab.view.webContents.executeJavaScript(`window.__mamMark = 'alive'`).catch(() => {});
+  setGlobalContentSetting(vm, 'adBlock', false);
+  await sleep(500);
+  setGlobalContentSetting(vm, 'adBlock', true);
+  await sleep(2000);
+  const gMark = await gOff.view.webContents.executeJavaScript(`window.__mamMark || 'gone'`).catch(() => 'gone');
+  const iMark = await offTab.view.webContents.executeJavaScript(`window.__mamMark || 'gone'`).catch(() => 'gone');
+  check('adblock-off-account-unaffected-by-other-accounts-reload', gMark === 'gone' && iMark === 'alive',
+    `following(${gMark}) overridden-off(${iMark})`);
+
+  // ---------- data / API contracts ----------
+  // 12. sparse storage: setting one key never creates the other, and clearing deletes the key.
+  registerAccount('vercel', 'x-j');
+  setAccountContentOverride(vm, 'vercel', 'x-j', 'adBlock', 'off');
+  const jAcc = findAccount('vercel', 'x-j');
+  check('content-override-stored-sparse',
+    JSON.stringify(jAcc.contentOverride) === JSON.stringify({ adBlock: 'off' }),
+    JSON.stringify(jAcc.contentOverride));
+
+  // 13. the owner's bar, mechanically: set then clear leaves accounts.json byte-identical.
+  const accFile = path.join(app.getPath('userData'), 'accounts.json');
+  registerAccount('vercel', 'x-k');
+  const before13 = fs.readFileSync(accFile);
+  setAccountContentOverride(vm, 'vercel', 'x-k', 'darkMode', 'on');
+  setAccountContentOverride(vm, 'vercel', 'x-k', 'darkMode', 'follow');
+  const after13 = fs.readFileSync(accFile);
+  check('content-override-clear-is-byte-identical', before13.equals(after13),
+    `${before13.length} vs ${after13.length} bytes; key present after clear: ${'contentOverride' in findAccount('vercel', 'x-k')}`);
+
+  // 14. the IPC rejects an unknown name and an unknown account (mirrors account-no-autofill).
+  const throws = fn => { try { fn(); return false; } catch { return true; } };
+  check('content-override-rejects-unknown-name', throws(() => setAccountContentOverride(vm, 'vercel', 'x-j', 'network', 'on')));
+  check('content-override-rejects-unknown-account', throws(() => setAccountContentOverride(vm, 'vercel', 'nobody', 'adBlock', 'on')));
+  // 15. only on / off / follow are accepted — and nothing is written when the value is refused.
+  const jBefore = JSON.stringify(findAccount('vercel', 'x-j').contentOverride);
+  check('content-override-invalid-value-rejected',
+    throws(() => setAccountContentOverride(vm, 'vercel', 'x-j', 'adBlock', 'yes'))
+      && JSON.stringify(findAccount('vercel', 'x-j').contentOverride) === jBefore,
+    `stored=${jBefore}`);
+
+  // ---------- the resolver contract (MUTATION-PLUS) ----------
+  // The follow path must be derived from the GLOBAL, never a hardcoded literal. The spec's own
+  // formula is `!!settings[name]`, so the returned value is the global's truthiness — not the raw
+  // value (a string fake therefore reads `true`, and asserting raw identity would be asserting
+  // against the contract). What a literal default cannot do is FOLLOW the global in both directions:
+  // a resolver hardcoded to true fails the first half, one hardcoded to false fails the second.
+  const followOn = resolveContent({}, 'adBlock', { adBlock: true });
+  const followOff = resolveContent({ contentOverride: {} }, 'adBlock', { adBlock: false });
+  const followUnset = resolveContent({}, 'darkMode', {});
+  const followOverridden = resolveContent({ contentOverride: { adBlock: 'on' } }, 'adBlock', { adBlock: false });
+  check('resolver-follow-tracks-the-global-not-a-literal',
+    followOn === true && followOff === false && followUnset === false && followOverridden === true,
+    `global true->${followOn}, global false->${followOff}, unset->${followUnset}, override-on-over-global-off->${followOverridden}`);
+
   fs.writeFileSync(path.join(__dirname, '..', 'smoke-report.json'), JSON.stringify(results, null, 2));
   app.exit(results.checks.every(c => c.ok) ? 0 : 1);
 }
@@ -1633,6 +1993,55 @@ function runInteractive(captureMode = false) {
               : { kind: 'filled', username: 'demo.user.two@example.com', credentialId: 'demo-cred', fillId: 'demo' });
           console.log('[capture] demo notice:', plan.kind, (plan.choices || []).length);
           await new Promise(r => setTimeout(r, 700));
+        }
+        // --demo-home-marker: give two demo accounts one override each through the REAL path, so the
+        // Home grid shows the "content: custom" marker the way a user would see it (0.11.0).
+        if (process.argv.includes('--demo-home-marker')) {
+          try {
+            if (findAccount('vercel', 'work')) setAccountContentOverride(vm, 'vercel', 'work', 'darkMode', 'off');
+            if (findAccount('netlify', 'agency')) setAccountContentOverride(vm, 'netlify', 'agency', 'adBlock', 'on');
+          } catch (err) { console.error('[demo] home marker failed:', err.message); }
+          vm.emitState();
+          await new Promise(r => setTimeout(r, 800));
+          const info = await win.webContents.executeJavaScript(`JSON.stringify([...document.querySelectorAll('.card .contentcustom')].map(m => {
+            const r = m.getBoundingClientRect();
+            return m.closest('.card').querySelector('.label').innerText + ' :: ' + m.innerText + ' @' + Math.round(r.x) + ',' + Math.round(r.y);
+          }))`).catch(err => 'probe failed: ' + err.message);
+          console.log('[capture] home markers:', info);
+          await new Promise(r => setTimeout(r, 300));
+        }
+        // --demo-content: give the account in --capture-open one override through the REAL path, then
+        // open its gear window from the RENDERER, so the screenshot shows the real three-way selects,
+        // the worded resolved state and the honest note (0.11.0). Drives state from main, never from
+        // --capture-js (which intermittently exits 127 on this machine). Scratch demo profile only.
+        if (process.argv.includes('--demo-content') && openKey) {
+          const [dsvc, did] = openKey.split('::');
+          try { setAccountContentOverride(vm, dsvc, did, 'darkMode', 'off'); } catch (err) { console.error('[demo] content override failed:', err.message); }
+          vm.emitState();
+          await new Promise(r => setTimeout(r, 500));
+          if (win.webContents && !win.webContents.isDestroyed()) {
+            await win.webContents.executeJavaScript(`document.querySelector('[data-gear="${openKey}"]') && document.querySelector('[data-gear="${openKey}"]').click()`).catch(err => console.error('[demo] gear click failed:', err.message));
+          }
+          await new Promise(r => setTimeout(r, 900));
+          const info = await win.webContents.executeJavaScript(`JSON.stringify({
+            modalOpen: !document.getElementById('modal-back').hidden,
+            selects: [...document.querySelectorAll('#modal select')].map(s => ({ id: s.id, value: s.value, options: s.options.length })),
+            states: [...document.querySelectorAll('#modal .contentctl .note')].map(n => n.textContent.trim()),
+            note: (() => { const ns = [...document.querySelectorAll('#modal .note')]; const n = ns.find(x => /both directions/.test(x.textContent)); return n ? n.textContent.trim().slice(0, 120) : ''; })(),
+          })`).catch(err => 'probe failed: ' + err.message);
+          console.log('[capture] demo content:', info);
+          // drive one select through the REAL renderer → preload → main chain and read the store back
+          const realPath = await win.webContents.executeJavaScript(`(async () => {
+            const sel = document.getElementById('m-content-adBlock');
+            const before = sel.value;
+            sel.value = 'off'; sel.dispatchEvent(new Event('change', { bubbles: true }));
+            await new Promise(r => setTimeout(r, 900));
+            return JSON.stringify({ before, after: sel.value, stateLine: document.getElementById('m-content-adBlock-state').textContent.trim() });
+          })()`).catch(err => 'real-path probe failed: ' + err.message);
+          console.log('[capture] demo content real path:', realPath, 'stored:', JSON.stringify((findAccount(openKey.split('::')[0], openKey.split('::')[1]) || {}).contentOverride));
+          // scroll the modal to its end so the honest note under the selects is in frame
+          await win.webContents.executeJavaScript(`(() => { const m = document.getElementById('modal'); if (m) m.scrollTop = m.scrollHeight; return m ? m.scrollTop : -1; })()`).catch(() => {});
+          await new Promise(r => setTimeout(r, 400));
         }
         // --demo-picker: open the address-strip key chip's picker from MAIN (state → emitState → the
         // renderer's own click handler), so a screenshot shows the real popover and not hand-written
@@ -2071,6 +2480,14 @@ function runInteractive(captureMode = false) {
     vm.emitState();
     return acc.noAutoFill;
   });
+  // Per-account content override (0.11.0): 'follow' | 'on' | 'off' per control, stored SPARSELY on
+  // the account record (see updateContentOverride). 'follow' deletes the key, so clearing restores
+  // the account's stored bytes. An override is a TRUE override in both directions (owner decision
+  // Q2): it may turn a control on while the app-wide toggle is off, and vice versa. The change is
+  // applied to that account's live tab immediately; every other tab is re-resolved and acted on only
+  // if ITS value actually moved (an untouched account is never reloaded or re-engaged).
+  ipcMain.handle('account-content-override', (_e, svc, id, name, value) =>
+    setAccountContentOverride(vm, svc, id, name, value));
   // Dismiss the per-tab notice (banner X).
   ipcMain.handle('dismiss-notice', (_e, key) => { vm.setNotice(key, null); return true; });
   // Undo an auto-fill: the preload clears exactly what it filled and answers with what it cleared.
@@ -2173,31 +2590,7 @@ function runInteractive(captureMode = false) {
     vm.emitState();
     return true;
   });
-  ipcMain.handle('set-content-setting', (_e, name, value) => {
-    if (!['adBlock', 'darkMode', 'saveLogins', 'autofill', 'autoUpdate'].includes(name)) throw new Error(`unknown setting: ${name}`);
-    store.settings[name] = !!value;
-    if (name === 'autoUpdate') { store.save(); updater.setAutoUpdate(!!value); vm.emitState(); return !!value; }
-    store.save();
-    if (name === 'darkMode') {
-      // The engine runs in each view's isolated world, so a flip is one enable/disable call per
-      // live tab — no reload. The previous extension path forced a reload of every open tab, which
-      // threw away scroll position and anything typed into a half-filled form.
-      const on = !!value;
-      for (const t of vm.tabs.values()) {
-        if (on) dark.enable(t.view.webContents);
-        else dark.disable(t.view.webContents);
-      }
-    } else if (name === 'adBlock') {
-      // the network layer flips live through its closure; cosmetic CSS needs a re-apply on, and a
-      // reload off (injected CSS can only be undone by reloading)
-      for (const t of vm.tabs.values()) {
-        if (value) content.applyToPage(t.view.webContents, { adBlock: true });
-        else t.view.webContents.reload();
-      }
-    }
-    vm.emitState();
-    return store.settings[name];
-  });
+  ipcMain.handle('set-content-setting', (_e, name, value) => setGlobalContentSetting(vm, name, value));
   ipcMain.handle('content-stats', () => ({
     blocked: content.stats.blocked,
     listSource: content.filters.loadedFrom,
@@ -2291,6 +2684,8 @@ function runInteractive(captureMode = false) {
 module.exports = {
   accountLoginSummaries, managerRows, setOrClearDefault, resolveAmong, fillCandidatesFor, autoFillPlan,
   originAllowed, accountKey,
+  resolveContent, updateContentOverride, contentOverrideFor,
+  setAccountContentOverride, setGlobalContentSetting, applyContentToFreshDocument, reactToContentChange, contentSnapshot,
   _creds: creds,
 };
 

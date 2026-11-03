@@ -251,6 +251,14 @@ encrypted with DPAPI, revocable in one click, and never leave the main process.
   session, costing roughly 2 MB per open account. Dark Reader's browser extension cannot run in
   Electron (its background worker needs APIs Electron does not expose, and its content script
   would touch the page's own JavaScript), so the engine is bundled and driven directly.
+- **Per-account overrides (new in 0.11.0).** Open an account's gear window and each control has a
+  three-way choice: *Follow the app-wide setting* (the default), *Always on for this account*, or
+  *Always off for this account*. An override works **in both directions** — an account can keep
+  blocking ads or stay dark while the app-wide toggle is off, and vice versa — and applies at once to
+  that account's open tab. Only turning ad-block **off** reloads that one tab, because the injected
+  hide-ads style can't be retracted any other way; dark mode and switching ad-block on never reload,
+  and no other account's tab is ever reloaded. Accounts that override anything are marked
+  **content: custom** on their Home card, and an account with no override behaves exactly as before.
 
 ### Extensibility
 - **Add any service by URL** — it gets its own rail row and isolated per-account sessions.
@@ -373,7 +381,7 @@ npm run smoke:creds    # import, per-account/manager/site lists, defaults, copy,
 npm run smoke:autofill # real page: form detection, fill + request ids, undo, capture, origin guard (15)
 npm run smoke:updates  # version comparison, silent-install mode, auto-update toggle, real release-feed check (11)
 npm run smoke:services # every built-in login page loads inside an isolated partition (42)
-npm run smoke:dark     # Dark Reader darkens a white page, stays out of the page's own JS, re-injects after navigation (9)
+npm run smoke:dark     # Dark Reader darkens a white page, stays out of the page's own JS, re-injects after navigation; per-account ad-block/dark overrides (26)
 npm run capture        # screenshot the running shell (--capture-out, --capture-open svc::id, --capture-js)
 npm run spike          # memory benchmark
 npm run dist           # build the Windows installer locally
@@ -382,7 +390,7 @@ npm start -- --print-paths            # show the app name, version and data fold
 npm start -- --open vercel::personal  # open an account on launch
 ```
 
-The suite is 156 checks across eight modes. `MAM_USER_DATA=<dir>` points any command at an isolated
+The suite is 173 checks across eight modes. `MAM_USER_DATA=<dir>` points any command at an isolated
 profile.
 
 Releases are cut by pushing a `v*` tag: GitHub Actions checks the tag against `package.json`, builds

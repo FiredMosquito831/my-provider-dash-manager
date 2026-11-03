@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
   credsDefault: (credentialId, svc, id, hostHint) => ipcRenderer.invoke('creds-default', credentialId, svc, id, hostHint),
   credsDelete: credentialId => ipcRenderer.invoke('creds-delete', credentialId),
   accountNoAutoFill: (svc, id, value) => ipcRenderer.invoke('account-no-autofill', svc, id, value),
+  accountContentOverride: (svc, id, name, value) => ipcRenderer.invoke('account-content-override', svc, id, name, value),
   dismissNotice: key => ipcRenderer.invoke('dismiss-notice', key),
   undoFill: key => ipcRenderer.invoke('undo-fill', key),
   noticeChoose: (key, credentialId) => ipcRenderer.invoke('notice-choose', key, credentialId),

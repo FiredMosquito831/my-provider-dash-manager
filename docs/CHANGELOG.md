@@ -2,6 +2,35 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.11.0 — 2026-11-03
+
+### Added
+- **Per-account ad-block and dark-mode overrides.** Ad-block and dark mode were app-wide only. Every
+  account's **gear window** ("Manage account") now carries one control per feature with three
+  choices: **Follow the app-wide setting** (the default — nothing changes until you touch it),
+  **Always on for this account**, or **Always off for this account**. Under each choice the window
+  says in words what the account actually resolves to ("Following the app-wide setting — currently
+  on"), so the third state can never be confusing.
+- **Overrides work in both directions.** An account's override *replaces* the app-wide toggle for
+  that account: an account can keep blocking ads or stay dark while the app-wide toggle is off, and
+  can be exempted while it is on. The gear window states this plainly.
+- **It applies at once, with no reload — except one case.** Changing dark mode or turning ad-block
+  *on* takes effect in the account's open tab immediately, in place. Turning ad-block **off** reloads
+  that one tab, because the hidden-ad style injected into the page can only be removed by reloading.
+  Changing the app-wide toggle now reloads only the tabs whose *effective* value actually changed,
+  so an account that overrides a control is never reloaded by a change that does not affect it.
+- **A "content: custom" marker** on the Home card of any account that overrides a content setting,
+  so the exceptions are visible without opening each gear window.
+
+### Changed
+- Changing the app-wide **Ad-block** toggle no longer reloads every open tab: it reloads only the
+  tabs whose resolved value fell to off. With no overrides set, that is exactly the same set of tabs
+  as before.
+- `npm run smoke:dark` grows from 9 to 26 checks: the first ad-block coverage in the suite (a
+  network-free `ERR_BLOCKED_BY_CLIENT` vs `ERR_NAME_NOT_RESOLVED` discriminator), per-account dark
+  and ad-block checks in both directions, live-flip checks, the sparse-storage and byte-identity
+  contracts, and IPC validation. Suite total 156 → 173.
+
 ## 0.10.1 — 2026-11-03
 
 ### Fixed

@@ -422,8 +422,8 @@ function renderHome() {
     <div class="sub">
       <span>Warm-tab limit: <input type="number" id="warm-limit" min="1" max="15" value="${state.warmLimit}"></span>
       <button class="ctlbtn" id="refresh-status" title="Re-fetch API status for all connected accounts">${icon('refresh')} Refresh status</button>
-      <button class="ctlbtn ${st.adBlock ? 'on' : ''}" id="t-adBlock" title="Block ads and trackers in account tabs (uBlock-style, built in)">${icon('shield')} Ad-block${state.blocked ? ` · ${state.blocked}` : ''}</button>
-      <button class="ctlbtn ${st.darkMode ? 'on' : ''}" id="t-darkMode" title="Dark mode for every account tab, powered by Dark Reader — applies instantly, no reload">${icon('moon')} Dark mode</button>
+      <button class="ctlbtn ${st.adBlock ? 'on' : ''}" id="t-adBlock" title="Block ads and trackers in account tabs (uBlock-style, built in). Applies to every account that follows the app-wide setting — an account can override it in its gear window">${icon('shield')} Ad-block${state.blocked ? ` · ${state.blocked}` : ''}</button>
+      <button class="ctlbtn ${st.darkMode ? 'on' : ''}" id="t-darkMode" title="Dark mode for every account tab, powered by Dark Reader — applies instantly, no reload. Accounts that follow the app-wide setting switch with it; per-account overrides in the gear window win">${icon('moon')} Dark mode</button>
       <span>· click a card to open its dashboard — sessions persist per account</span>
     </div>
     ${services.filter(hasPresence).map(svc => {
@@ -560,7 +560,12 @@ function cardHtml(svc, a) {
   const tab = state.tabs.find(t => t.key === a.key);
   const openState = tab ? (tab.live ? '<span class="ok">open</span>' : 'asleep') : '';
   const signState = a.lastState === 'signin' ? '<span class="warn">sign-in needed</span>' : (a.lastState === 'ok' ? 'signed in' : '');
-  const meta = [openState, signState, statusText].filter(Boolean).join(' · ');
+  // 0.11.0: a minimal marker so an exception is visible without opening each gear window.
+  const ov = a.contentOverridden || {};
+  const custom = ov.adBlock || ov.darkMode
+    ? `<span class="contentcustom" title="This account overrides the app-wide ad-block / dark-mode settings — open its gear window to see or reset them">content: custom${ov.adBlock && ov.darkMode ? '' : ov.adBlock ? ' (ad-block)' : ' (dark mode)'}</span>`
+    : '';
+  const meta = [openState, signState, statusText, custom].filter(Boolean).join(' · ');
   return `<div class="card" data-open="${esc(a.key)}" title="Open ${esc(svc.name)} / ${esc(a.label)}">
     <div class="top">
       <span class="dot" style="background:${colorOf(a.colorIdx, a.svc)}"></span>
@@ -818,6 +823,35 @@ async function openPluginsModal() {
   });
 }
 
+// ---------- per-account content settings (0.11.0) ----------
+// The raw override lives on the account record main sends (`contentOverride`), sparse: only keys the
+// user changed exist. 'follow' is the ABSENT key; main deletes on clear, so the renderer never has to
+// model "unset" separately.
+function overrideValue(acc, name) {
+  const v = acc && acc.contentOverride ? acc.contentOverride[name] : undefined;
+  return v === 'on' || v === 'off' ? v : 'follow';
+}
+function contentOptions(acc, name) {
+  const cur = overrideValue(acc, name);
+  return [['follow', 'Follow the app-wide setting'], ['on', 'Always on for this account'], ['off', 'Always off for this account']]
+    .map(([v, label]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${label}</option>`).join('');
+}
+// The sentence under the select: where the value comes from, and what it currently means.
+function contentStateText(acc, name) {
+  const globalOn = !!(state.settings || {})[name];
+  const v = overrideValue(acc, name);
+  if (v === 'on') return 'Always on for this account — the app-wide toggle is ignored here.';
+  if (v === 'off') return 'Always off for this account — the app-wide toggle is ignored here.';
+  return `Following the app-wide setting — currently ${globalOn ? 'on' : 'off'}.`;
+}
+// Update the modal's local copy of the sparse override from main's authoritative answer.
+function mergeOverride(prev, name, value) {
+  const next = Object.assign({}, prev || {});
+  if (value === 'follow') { delete next[name]; return Object.keys(next).length ? next : null; }
+  next[name] = value;
+  return next;
+}
+
 function openEditModal(key, focusToken = false) {
   const [svc, id] = key.split('::');
   const acc = registry.find(a => a.svc === svc && a.id === id);
@@ -843,6 +877,16 @@ function openEditModal(key, focusToken = false) {
       </span>
     </label>
     <div class="note" style="margin-top:4px">Auto-fill still needs the app-wide <b>Auto-fill</b> toggle on Home; this switch only stops it for this account. Manual <b>Use</b> and the rail key always work.</div>
+    <label>Content settings for this account</label>
+    <div class="contentctl">
+      <label for="m-content-adBlock">Ad-block</label>
+      <select id="m-content-adBlock">${contentOptions(acc, 'adBlock')}</select>
+      <div class="note" id="m-content-adBlock-state">${esc(contentStateText(acc, 'adBlock'))}</div>
+      <label for="m-content-darkMode">Dark mode</label>
+      <select id="m-content-darkMode">${contentOptions(acc, 'darkMode')}</select>
+      <div class="note" id="m-content-darkMode-state">${esc(contentStateText(acc, 'darkMode'))}</div>
+    </div>
+    <div class="note">Overrides replace the app-wide toggle for this account, in both directions — an account can be blocked or dark while the app-wide toggle is off, and vice versa. Changing one applies at once to this account's open tab; turning ad-block <b>off</b> reloads that tab (the hidden-ad style can only be removed by reloading).</div>
     <div class="row"><button class="btn-primary" id="m-save">Save</button><button class="btn-plain" id="m-cancel">Cancel</button></div>
     <div class="row"><button class="btn-danger" id="m-del" title="Deletes this account's stored session">Delete account &amp; wipe session</button></div>
     <div id="m-error" style="font-size:11px;margin-top:8px"></div>
@@ -881,6 +925,22 @@ function openEditModal(key, focusToken = false) {
     try { noAuto.checked = await window.api.accountNoAutoFill(svc, id, noAuto.checked); }
     catch (err) { const b2 = $modal.querySelector('#m-error'); b2.style.color = 'var(--danger)'; b2.textContent = errText(err); }
   };
+  // Content settings are saved on change too (a standing preference, like Never auto-fill). The
+  // worded state under each select is re-rendered from MAIN's answer, so the sentence always
+  // describes what the account actually resolves to now.
+  for (const name of ['adBlock', 'darkMode']) {
+    const sel = $modal.querySelector(`#m-content-${name}`);
+    if (!sel) continue;
+    sel.onchange = async () => {
+      try {
+        const r = await window.api.accountContentOverride(svc, id, name, sel.value);
+        const fresh = registry.find(a => a.svc === svc && a.id === id) || acc;
+        fresh.contentOverride = mergeOverride(acc.contentOverride, name, r.value);
+        const stateLine = $modal.querySelector(`#m-content-${name}-state`);
+        if (stateLine) stateLine.textContent = contentStateText(fresh, name);
+      } catch (err) { const b2 = $modal.querySelector('#m-error'); b2.style.color = 'var(--danger)'; b2.textContent = errText(err); }
+    };
+  }
   saveBtn.onclick = async () => {
     await window.api.updateAccount(svc, id, { label: labelInput.value, proxy: $modal.querySelector('#m-proxy').value });
     closeModal();

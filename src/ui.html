@@ -164,6 +164,12 @@
     .card .meta { color:var(--muted); font-size:11px; min-height:16px; line-height:1.45; }
     .card .meta .warn { color:var(--warn); }
     .card .meta .ok { color:var(--ok); }
+    /* 0.11.0: "content: custom" — an account that overrides ad-block / dark mode. One rule; the
+       marker lives in the existing meta line so no card layout changes. */
+    .card .meta .contentcustom { color:var(--accent); }
+    /* the gear window's two per-account content selects (uses #modal select, already styled) */
+    #modal .contentctl select { margin-bottom:2px; }
+    #modal .contentctl .note { margin-top:2px; margin-bottom:var(--s3); }
     .card .gear { margin-left:auto; display:flex; align-items:center; justify-content:center; width:22px; height:22px;
                   border:0; border-radius:6px; background:transparent; color:var(--muted); padding:0; }
     .card .gear:hover { background:var(--panel3); color:var(--text); }
