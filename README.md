@@ -190,8 +190,14 @@ guard trusts (`npm run smoke:services`). Google sign-in was verified against Goo
 works in the app. Anything else can be added by URL or as a plugin.
 
 ### Password manager with per-service import
+- **A picker for the site you are on.** A key chip beside the address bar counts the saved logins for
+  the page's current site; click it for a **searchable** list with **Use** (fills the email and
+  password fields and sets that account's default, with Undo), **Copy email** and **Copy password**.
+  The chip refreshes as you navigate and disappears when the site has none.
 - **Remembers logins you type** inside an account tab, bound to *that* account, so two accounts on the
   same service refill with different credentials.
+- **Your imported logins show up on every matching site.** The picker lists this account's own saved
+  logins *and* every imported login whose site matches the page, labelled with where it came from.
 - **See each account's logins.** Open an account's **Manage** (gear) window and its *Saved logins* list
   shows exactly the logins that belong to it, with **Use** to make one that account's default and fill
   it into the open tab. A small key on the rail row marks every account that has a saved login, even
@@ -204,6 +210,9 @@ works in the app. Anything else can be added by URL or as a plugin.
   filterable by service or by account, with set/clear default and delete. No password is ever shown.
 - **Choose which login fills:** when more than one matches a site the app asks instead of guessing,
   and your choice is remembered as that account's default (marked ★ in the manager).
+- **Copy without revealing:** copying an email or password puts it on the Windows clipboard from the
+  app's secured process. A password is never displayed and never sent to the window that draws the
+  interface, and a copy is refused unless the tab is on that login's own site.
 - **Fills from anywhere** on the service's own site: if the page you are on has no matching login (a
   dashboard, say), the account's login for that service is used. Filling on any other domain is
   refused, and a fill that cannot happen now says why instead of failing quietly.
@@ -360,7 +369,7 @@ npm start              # run the app
 npm run smoke          # sessions, registry, partitions, tab navigation (12 checks)
 npm run smoke:restore  # sessions survive a restart (real cookies)
 npm run smoke:tokens   # DPAPI round-trip + live fake-token rejection per provider (15)
-npm run smoke:creds    # import, per-account/manager lists, defaults, fill fallback, auto-fill plan, encryption at rest (39)
+npm run smoke:creds    # import, per-account/manager/site lists, defaults, copy, fill fallback, auto-fill plan, encryption at rest (50)
 npm run smoke:autofill # real page: form detection, fill + request ids, undo, capture, origin guard (15)
 npm run smoke:updates  # version comparison, silent-install mode, auto-update toggle, real release-feed check (11)
 npm run smoke:services # every built-in login page loads inside an isolated partition (42)
@@ -373,7 +382,7 @@ npm start -- --print-paths            # show the app name, version and data fold
 npm start -- --open vercel::personal  # open an account on launch
 ```
 
-The suite is 145 checks across eight modes. `MAM_USER_DATA=<dir>` points any command at an isolated
+The suite is 156 checks across eight modes. `MAM_USER_DATA=<dir>` points any command at an isolated
 profile.
 
 Releases are cut by pushing a `v*` tag: GitHub Actions checks the tag against `package.json`, builds

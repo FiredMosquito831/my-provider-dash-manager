@@ -1,4 +1,4 @@
-const { app, BaseWindow, BrowserWindow, WebContentsView, session, ipcMain, shell, Menu } = require('electron');
+const { app, BaseWindow, BrowserWindow, WebContentsView, session, ipcMain, shell, Menu, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -225,6 +225,67 @@ function useAsDefault(svc, id, credentialId) {
   const hosts = serviceHosts(svc);
   const host = hosts.find(h => creds.candidatesForAccount(svc, id, `https://${h}/`).some(c => c.id === credentialId)) || hosts[0] || '';
   creds.setDefaultForAccount(credentialId, svc, id, host);
+}
+
+// ---------- per-site picker (0.10.0) ----------
+// What the key chip in the address strip counts, and what its popover lists: everything that could
+// sign you in on the host the tab is ON right now — this account's own captures for that host, plus
+// every SHARED import whose host relates to it (the owner's "all my google passes on any google
+// login field"; imports are not owned by an account, so they are the same list for every account).
+// A capture made by a DIFFERENT account of the same service is deliberately NOT here: invariant 1
+// binds a credential to its account AND origin, and 0.9.0's accountLoginSummaries draws the same
+// boundary ("it is that account's login"). Widening this to siblings would let one account's tab
+// read another account's saved password on a shared host — the account half of D14.
+// Summaries only: id / username / host / source / ★.
+function siteLoginRows(svc, id, liveUrl, list) {
+  const host = creds.hostOf(liveUrl || '');
+  if (!host) return { host: '', rows: [] };
+  const key = accountKey(svc, id);
+  const rows = (list || credSummaries())
+    .filter(c => c.host && creds.hostRelated(c.host, host))
+    .filter(c => !c.accountKey || c.accountKey === key)
+    .map(c => {
+      // An import has no owning account, so its label is null; if a credential ever carries another
+      // account's key it would be named here (the projection stays honest either way).
+      const owner = c.accountKey && c.accountKey !== key ? store.accounts.find(a => accountKey(a.svc, a.id) === c.accountKey) : null;
+      return {
+        id: c.id, username: c.username || '', host: c.host || '', source: c.source || 'unknown',
+        own: c.accountKey === key, accountLabel: owner ? (owner.label || owner.id) : null,
+        isDefault: (c.defaultForAccounts || []).includes(key),
+      };
+    })
+    .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || Number(b.own) - Number(a.own)
+      || String(a.username).localeCompare(String(b.username)));
+  return { host, rows };
+}
+
+// Copying a saved password is the one operation that touches the secret outside a fill. It stays in
+// the MAIN process: the value goes from credentials.js straight to the OS clipboard, and the caller
+// gets a label, never the value (invariant 3 holds and is not weakened by a reveal path).
+// `svc`/`id`/`liveUrl` are supplied by the IPC wrapper from the ACTIVE TAB (never from the renderer),
+// so a copy can only ever happen on the tab the picker belongs to.
+function copyCredentialField(credentialId, field, svc, id, liveUrl) {
+  if (field !== 'username' && field !== 'password') return { ok: false, reason: 'bad-field', message: 'Unknown field.' };
+  const liveHost = creds.hostOf(liveUrl || '');
+  // The same gate every fill passes (D14): the tab must be ON one of this service's own sites...
+  if (!originAllowed(svc, liveUrl)) {
+    return {
+      ok: false, reason: 'foreign-host',
+      message: `This tab is on ${liveHost || 'another site'}, not ${serviceHosts(svc)[0] || 'the service'} — refusing to copy a saved password here.`,
+    };
+  }
+  const key = accountKey(svc, id);
+  // ...and the credential must be one THIS account may use on this page: its own capture for the
+  // live site, or a shared import for it. Another account's capture is refused here even though the
+  // picker never lists it — the account half of invariant 1 (a capture belongs to its account).
+  const cred = creds.loadAll().find(c => c.id === credentialId);
+  if (!cred) return { ok: false, reason: 'unknown-id', message: 'That saved login no longer exists.' };
+  if (cred.accountKey && cred.accountKey !== key) return { ok: false, reason: 'other-account', message: 'That saved login belongs to a different account.' };
+  if (!cred.host || !creds.hostRelated(cred.host, liveHost)) return { ok: false, reason: 'other-site', message: 'That saved login belongs to a different site.' };
+  const value = field === 'password' ? cred.password : cred.username;
+  if (!value) return { ok: false, reason: 'empty', message: `That saved login has no ${field} stored.` };
+  clipboard.writeText(value);
+  return { ok: true, field, label: `${field === 'password' ? 'password' : 'email'} for ${cred.username || cred.host || 'this login'}` };
 }
 
 // Explicit clear semantics for creds-default (0.8.0 relied on the "null id never matches" side
@@ -479,6 +540,9 @@ class ViewManager {
       // isolated-world reset requires — the world (and Dark Reader in it) is gone by then and must
       // be re-injected. Same-document (pushState) routing never reaches here, so it never re-injects.
       if (store.settings.darkMode) dark.enable(view.webContents);
+      // A full load can land on a different host than did-navigate reported (client-side redirects):
+      // refresh the address strip's key chip from the URL that actually finished loading (0.10.0).
+      this.emitState();
     });
     const onNav = (_e, url2) => {
       tab.url = url2;
@@ -648,8 +712,19 @@ class ViewManager {
   emitState() {
     if (!this.window || !this.window.webContents) return;
     const loginList = credSummaries(); // one decryption per state emit, not one per account
+    // The key chip in the address strip counts saved logins for the ACTIVE tab's live host (0.10.0).
+    // Recomputed here, so it is fresh after every navigation and every tab activation, and it is
+    // computed for the active tab only — the other tabs refresh when they are activated.
+    let siteLogins = null;
+    const activeTab = this.activeKey ? this.tabs.get(this.activeKey) : null;
+    if (activeTab && !activeTab.view.webContents.isDestroyed()) {
+      const liveUrl = activeTab.view.webContents.getURL();
+      const { host, rows } = siteLoginRows(activeTab.svc, activeTab.id, liveUrl, loginList);
+      siteLogins = { key: this.activeKey, host, count: host ? rows.length : 0 };
+    }
     this.window.webContents.send('tabs-state', {
       activeKey: this.activeKey,
+      siteLogins,
       warmLimit: store.settings.warmLimit,
       registry: store.accounts.map(a => ({
         ...a,
@@ -1111,6 +1186,65 @@ async function runSmokeCreds() {
         const plan = autoFillPlan('vercel', 'team-c', 'https://vercel.com/login');
         return plan.kind === 'choose' && !JSON.stringify(plan.choices).includes('shared-pw') && !JSON.stringify(plan.choices).includes('carol-pw');
       })());
+
+      // ---------- 0.10.0: the per-site picker ----------
+      // The fixture above: team-a holds a@example.com plus the two shared imports, team-b owns
+      // b@example.com, netlify's account owns nothing. A picker on vercel.com for team-a shows the
+      // account's own capture AND every shared import on the live host — never a sibling's capture
+      // (invariant 1: a capture belongs to the account that made it).
+      const siteA = siteLoginRows('vercel', 'team-a', 'https://vercel.com/login');
+      check('site-list-includes-shared-imports-from-another-account',
+        siteA.rows.map(r => r.username).sort().join() === ['a@example.com', 'carol@example.com', 'shared@example.com'].join()
+          && !siteA.rows.some(r => r.username === 'b@example.com'),
+        `${siteA.host}: ${siteA.rows.map(r => `${r.username}${r.accountLabel ? `[${r.accountLabel}]` : r.own ? '[own]' : '[import]'}`).join(',')}`);
+      check('site-list-rows-have-no-password-key',
+        siteA.rows.every(r => !('password' in r) && !JSON.stringify(r).includes('shared-pw') && !JSON.stringify(r).includes('pw-a')),
+        `${siteA.rows.length} rows: ${JSON.stringify(Object.keys(siteA.rows[0] || {}))}`);
+      // An import is shared (no owning account); a capture made by another account is that account's
+      // login and is neither listed nor copyable from here (invariant 1, the 0.9.0 boundary).
+      check('site-list-scope-is-own-captures-plus-shared-imports',
+        siteA.rows.filter(r => r.accountLabel === null).length === 3
+          && siteA.rows.find(r => r.username === 'a@example.com').own === true
+          && siteA.rows.filter(r => r.username === 'shared@example.com' || r.username === 'carol@example.com').every(r => r.own === false && r.accountLabel === null),
+        siteA.rows.map(r => `${r.username}:${r.own ? 'own' : 'shared'}`).join(' '));
+      // D14: a copy is refused when the tab is not on the service's own site ...
+      const offSite = copyCredentialField(siteA.rows[0].id, 'password', 'vercel', 'team-a', 'https://accounts.google.com/signin');
+      check('copy-refused-off-site', offSite.ok === false && offSite.reason === 'foreign-host', `reason=${offSite.reason}`);
+      // ... and an unknown id never yields a secret
+      const unknown = copyCredentialField('no-such-credential', 'password', 'vercel', 'team-a', 'https://vercel.com/login');
+      check('copy-refused-unknown-id', unknown.ok === false && unknown.reason === 'unknown-id', `reason=${unknown.reason}`);
+      // a sibling account's capture is never available here, even on its own site (invariant 1)
+      const otherAcct = creds.loadAll().find(c => c.accountKey === 'vercel::team-b');
+      const sibling = copyCredentialField(otherAcct.id, 'password', 'vercel', 'team-a', 'https://vercel.com/login');
+      check('copy-refused-another-accounts-capture', sibling.ok === false && sibling.reason === 'other-account', `reason=${sibling.reason}`);
+      clipboard.clear();
+      // the real copy path: main writes the clipboard, and the answer is a label — never the secret
+      clipboard.writeText('sentinel-before-copy');
+      const sharedRow = siteA.rows.find(r => r.username === 'shared@example.com');
+      const copied = copyCredentialField(sharedRow.id, 'password', 'vercel', 'team-a', 'https://vercel.com/login');
+      check('copy-writes-the-right-password-to-the-clipboard',
+        copied.ok === true && clipboard.readText() === 'shared-pw' && !JSON.stringify(copied).includes('shared-pw'),
+        `ok=${copied.ok} label="${copied.label}" clipboard-match=${clipboard.readText() === 'shared-pw'}`);
+      const copiedUser = copyCredentialField(sharedRow.id, 'username', 'vercel', 'team-a', 'https://vercel.com/login');
+      check('copy-email-writes-the-username', copiedUser.ok === true && clipboard.readText() === 'shared@example.com',
+        `label="${copiedUser.label}"`);
+      const badField = copyCredentialField(sharedRow.id, 'reveal', 'vercel', 'team-a', 'https://vercel.com/login');
+      check('copy-refuses-an-unknown-field', badField.ok === false && badField.reason === 'bad-field', `reason=${badField.reason}`);
+      clipboard.clear();
+      // the chip counts exactly the rows the picker would list (main computes both)
+      check('site-list-count-matches-the-rows',
+        siteLoginRows('vercel', 'team-a', 'https://vercel.com/login').rows.length === 3
+          && siteLoginRows('vercel', 'team-c', 'https://example.com/').rows.length === 0,
+        `team-a=${siteLoginRows('vercel', 'team-a', 'https://vercel.com/login').rows.length}`);
+      // Use from the picker is the SAME 0.9.0 path: fill-login(key, id) sets the default, then fills.
+      // Main-side we can prove the default half; the fill half is the existing Use contract.
+      const pickRow = siteA.rows.find(r => r.username === 'carol@example.com');
+      useAsDefault('vercel', 'team-a', pickRow.id);
+      check('use-from-picker-sets-the-account-default',
+        siteLoginRows('vercel', 'team-a', 'https://vercel.com/login').rows.find(r => r.id === pickRow.id).isDefault === true
+          && siteLoginRows('vercel', 'team-b', 'https://vercel.com/login').rows.find(r => r.id === pickRow.id).isDefault === false,
+        managerRows().find(r => r.id === pickRow.id).defaultForAccounts.join() || 'none');
+      setOrClearDefault(null, 'vercel', 'team-a', 'https://vercel.com/login');
     } finally { try { fs.rmSync(csv3, { force: true }); } catch {} }
 
     const st = creds.stats();
@@ -1439,7 +1573,16 @@ function runInteractive(captureMode = false) {
     //   --capture-scroll <px>    scroll the Home grid down first
     //   --capture-wait <ms>      extra settle time
     //   --capture-js "<expr>"    run an expression in the chrome page (e.g. open a modal)
-    const argVal = name => { const i = process.argv.indexOf(name); return i > -1 ? process.argv[i + 1] : null; };
+    // Both "--flag value" and "--flag=value" are accepted. The "=" form matters on this machine:
+    // an account key contains "::" and the Git Bash/MSYS layer mangles that in a separate argv
+    // token (the process exits 127 before it starts), while "--capture-open=vercel::work" passes
+    // through intact. Same value, same code path.
+    const argVal = name => {
+      const viaEq = process.argv.find(a => a.startsWith(`${name}=`));
+      if (viaEq) return viaEq.slice(name.length + 1);
+      const i = process.argv.indexOf(name);
+      return i > -1 ? process.argv[i + 1] : null;
+    };
     const outFile = argVal('--capture-out') || 'ui-screenshot.png';
     const openKey = argVal('--capture-open');
     const scrollPx = Number(argVal('--capture-scroll') || 0);
@@ -1471,6 +1614,47 @@ function runInteractive(captureMode = false) {
               : { kind: 'filled', username: 'demo.user.two@example.com', credentialId: 'demo-cred', fillId: 'demo' });
           console.log('[capture] demo notice:', plan.kind, (plan.choices || []).length);
           await new Promise(r => setTimeout(r, 700));
+        }
+        // --demo-picker: open the address-strip key chip's picker from MAIN (state → emitState → the
+        // renderer's own click handler), so a screenshot shows the real popover and not hand-written
+        // DOM. The chip is drawn from state.siteLogins, so one emitState is enough. Verification aid
+        // for a scratch demo profile, like --demo-notice (0.9.0); it changes no shipped behaviour.
+        if (process.argv.includes('--demo-picker') && openKey) {
+          const key = openKey;
+          if (vm.tabs.has(key)) vm.activate(key); // the chip only exists for the ACTIVE tab
+          await new Promise(r => setTimeout(r, 800));
+          vm.emitState();
+          await new Promise(r => setTimeout(r, 600));
+          if (win.webContents && !win.webContents.isDestroyed()) {
+            await win.webContents.executeJavaScript('document.getElementById("keysite").click()').catch(err => console.error('[capture] picker click failed:', err.message));
+          }
+          const info = await win.webContents.executeJavaScript(`JSON.stringify({
+            chip: document.getElementById('keysite').hidden ? 'hidden' : document.getElementById('keysite').innerText.trim(),
+            open: !document.getElementById('keypicker').hidden,
+            rows: document.querySelectorAll('#keypicker [data-kp-id]').length,
+            search: !!document.getElementById('kp-q'),
+            rowsMeta: [...document.querySelectorAll('#keypicker .kp-meta')].map(m => m.innerText.trim()).slice(0, 4),
+          })`).catch(err => 'probe failed: ' + err.message);
+          console.log('[capture] demo picker:', info);
+          // --demo-picker-copied: type in the search box and press Copy password through the real
+          // renderer → preload → main chain, then read the clipboard back from MAIN (the secret must
+          // never appear in the renderer). Photographs the searched + "Copied ✓" state.
+          if (process.argv.includes('--demo-picker-copied') && win.webContents && !win.webContents.isDestroyed()) {
+            const wired = await win.webContents.executeJavaScript(`(async () => {
+              const q = document.getElementById('kp-q');
+              q.value = 'demo.user.two'; q.dispatchEvent(new Event('input', { bubbles: true }));
+              const visible = [...document.querySelectorAll('#keypicker [data-kp-id]')].filter(r => !r.hidden).length;
+              const btn = [...document.querySelectorAll('#keypicker [data-kp-copy][data-kp-field="password"]')]
+                .find(b => !b.closest('[data-kp-id]').hidden);
+              if (!btn) return JSON.stringify({ filterVisible: visible, btnFound: false });
+              btn.click();
+              await new Promise(r => setTimeout(r, 400));
+              return JSON.stringify({ filterVisible: visible, btnFound: true, btnText: btn.innerText.trim() });
+            })()`).catch(err => 'wired probe failed: ' + err.message);
+            console.log('[capture] demo picker wired:', wired, 'clipboard-is-a-demo-password:', clipboard.readText().startsWith('demo-placeholder-'));
+            clipboard.clear();
+          }
+          await new Promise(r => setTimeout(r, 250));
         }
         if (extraWait) await new Promise(r => setTimeout(r, extraWait));
         // UnknownVizError / empty frames clear once the compositor produces a frame — retry
@@ -1829,6 +2013,24 @@ function runInteractive(captureMode = false) {
     logins: accountLoginSummaries(svc, id),
     signInUrl: (serviceByKey(svc) || {}).loginUrl || null,
   }));
+  // Per-SITE picker (0.10.0): the logins that can sign you in on the ACTIVE tab's live host. The
+  // renderer names the tab; main reads that tab's LIVE url, so the list can never describe a page the
+  // user has navigated away from. Summaries only (no `password` key, ever).
+  ipcMain.handle('creds-site-list', (_e, key) => {
+    const t = key ? vm.tabs.get(String(key)) : null;
+    if (!t) return { host: '', logins: [], count: 0, live: false };
+    const liveUrl = t.view.webContents.isDestroyed() ? '' : t.view.webContents.getURL();
+    const { host, rows } = siteLoginRows(t.svc, t.id, liveUrl);
+    return { host, logins: rows, count: rows.length, live: true };
+  });
+  // Copy a saved email/password to the OS clipboard without ever showing it (main-process clipboard).
+  // The account and the site gate come from the ACTIVE tab in main, not from the caller.
+  ipcMain.handle('creds-copy', (_e, key, credentialId, field) => {
+    const t = key ? vm.tabs.get(String(key)) : null;
+    if (!t) return { ok: false, reason: 'asleep', message: 'That tab is asleep — open it first.' };
+    const liveUrl = t.view.webContents.isDestroyed() ? '' : t.view.webContents.getURL();
+    return copyCredentialField(String(credentialId || ''), String(field || ''), t.svc, t.id, liveUrl);
+  });
   // Credential manager: summaries only, never passwords — the renderer must not hold one.
   // Imported passwords are classified by host, with the accounts each row can serve, so the manager
   // filters and the ★ markers both come from the main process (the only authority on them).

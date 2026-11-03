@@ -2,6 +2,28 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.10.0 — 2026-11-03
+
+### Added
+- **A saved-logins picker for the site you are on.** A small key chip now sits right of the address
+  bar and counts the saved logins that can sign you in on the page's current site — "🔑 3" — so you
+  see them on any sign-in page, not only when auto-fill happens to fire. Click it for a list with a
+  **search box** (by username or site) and, on each row, **Use** (fills the email and password fields
+  and makes it that account's default, with the usual Undo banner), **Copy email** and **Copy
+  password**. The chip refreshes as you navigate and shows nothing when the site has no saved logins.
+- **Shared imported logins are visible on every site they match.** The picker lists this account's
+  own saved logins *and* every imported login whose site matches the page — so an import done once
+  shows up on that service's login pages in every account, which is what "all my passes for this
+  site" means. Imported rows say where they came from; rows saved for this account say so.
+- **Copy never reveals.** Copy email and Copy password put the value on the Windows clipboard
+  straight from the app's secured process. The password is never displayed, and it is never sent to
+  the window that draws the interface — copying is refused unless the tab is actually on that
+  login's own site.
+
+### Changed
+- The picker is scoped to one account and one live site: another account's saved login is not
+  listed and cannot be copied from here (a saved login belongs to the account that made it).
+
 ## 0.9.0 — 2026-11-03
 
 ### Added

@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('api', {
   credsClear: () => ipcRenderer.invoke('creds-clear'),
   credsForAccount: (svc, id) => ipcRenderer.invoke('creds-for-account', svc, id),
   credsAccountList: (svc, id) => ipcRenderer.invoke('creds-account-list', svc, id),
+  credsSiteList: key => ipcRenderer.invoke('creds-site-list', key),
+  credsCopy: (key, credentialId, field) => ipcRenderer.invoke('creds-copy', key, credentialId, field),
   credsList: () => ipcRenderer.invoke('creds-list'),
   credsDefault: (credentialId, svc, id, hostHint) => ipcRenderer.invoke('creds-default', credentialId, svc, id, hostHint),
   credsDelete: credentialId => ipcRenderer.invoke('creds-delete', credentialId),

@@ -17,6 +17,9 @@ const $hibAll = document.getElementById('hib-all');
 const $railTop = document.getElementById('railtop');
 const $railScroll = document.getElementById('railscroll');
 const $railFoot = document.getElementById('railfoot');
+const $keysite = document.getElementById('keysite');
+const $keyPicker = document.getElementById('keypicker');
+const $keyPickerBack = document.getElementById('keypicker-back');
 
 // Lucide-style stroke icons (no emoji — see ui-ux-pro-max pre-delivery checklist)
 const ICONS = {
@@ -116,7 +119,107 @@ function renderNav() {
   reload.dataset.action = t.loading ? 'stop' : 'reload';
   $addr.classList.toggle('loading', !!t.loading);
   if (document.activeElement !== $addr) $addr.value = t.url || ''; // never clobber what the user is typing
+  renderKeyChip();
 }
+
+// ============ per-site login picker (0.10.0) ============
+// The chip shows how many saved logins can sign you in on the ACTIVE tab's live host — main computes
+// both the count and the rows from the tab's live URL, so the renderer never decides what "this site"
+// means. Nothing here ever holds a password: Use asks main to fill, Copy asks main to put it on the
+// clipboard, and both answers are summaries.
+let keyPicker = null; // { key, host, logins } while open
+function renderKeyChip() {
+  const sl = state.siteLogins;
+  const show = !!(sl && state.activeKey !== null && sl.key === state.activeKey && sl.count > 0);
+  $keysite.hidden = !show;
+  $keysite.classList.toggle('on', !!(show && keyPicker && keyPicker.key === state.activeKey));
+  if (!show) return;
+  $keysite.innerHTML = `${icon('key')}<span>${sl.count}</span>`;
+  $keysite.title = `${sl.count} saved login${sl.count === 1 ? '' : 's'} for ${sl.host || 'this site'} — click to pick one`;
+  $keysite.setAttribute('aria-label', $keysite.title);
+}
+function keyPickerRowHtml(l) {
+  const meta = `${esc(l.host) || 'no site recorded'} · ${esc(l.source)}`
+    + (l.accountLabel ? ` · <span class="own">for ${esc(l.accountLabel)}</span>`
+      : l.own ? ' · <span class="own">saved for this account</span>' : '');
+  return `<div class="kp-row" data-kp-id="${esc(l.id)}" data-search="${esc(`${l.username} ${l.host} ${l.source} ${l.accountLabel || ''}`.toLowerCase())}">
+    <span class="kp-who">${esc(l.username || '(no username)')}${l.isDefault ? ' <span class="star" title="This account’s default — auto-fill uses it first">★</span>' : ''}</span>
+    <span class="kp-acts">
+      <button class="kp-use" data-kp-use="${esc(l.id)}" title="Fill this login into the page and make it this account’s default">Use</button>
+      <button class="btn-plain" data-kp-copy="${esc(l.id)}" data-kp-field="username" title="Copy this login’s email to the clipboard — it is never shown here">Copy email</button>
+      <button class="btn-plain" data-kp-copy="${esc(l.id)}" data-kp-field="password" title="Copy this login’s password straight to the clipboard — it is never shown here">Copy password</button>
+    </span>
+    <span class="kp-meta">${meta}</span>
+  </div>`;
+}
+async function openKeyPicker() {
+  const key = state.activeKey;
+  if (key === null) return;
+  $keyPickerBack.hidden = false;
+  $keyPicker.hidden = false;
+  $keyPicker.innerHTML = '<div class="kp-note">Loading saved logins…</div>';
+  renderKeyChip();
+  let data = { host: '', logins: [] };
+  try { data = await window.api.credsSiteList(key); } catch (err) { data = { host: '', logins: [], error: errText(err) }; }
+  if (state.activeKey !== key) { closeKeyPicker(); return; } // the user moved on while it loaded
+  keyPicker = { key, host: data.host, logins: data.logins || [] };
+  drawKeyPicker();
+  const q = $keyPicker.querySelector('#kp-q');
+  if (q) q.focus();
+}
+function drawKeyPicker() {
+  if (!keyPicker) return;
+  const { host, logins } = keyPicker;
+  const rows = logins.length
+    ? logins.map(keyPickerRowHtml).join('')
+    : '<div class="kp-note">No saved login matches this site for this account yet — sign in once here and it is remembered, or import your passwords.</div>';
+  $keyPicker.innerHTML = `
+    <div class="kp-head">
+      <span class="kp-title">Saved for ${esc(host || 'this site')} <span>· ${logins.length}</span></span>
+      <button class="btn-plain" id="kp-x" title="Close" aria-label="Close">${icon('x')}</button>
+    </div>
+    <div class="kp-search">${icon('search')}<input id="kp-q" type="text" spellcheck="false" autocomplete="off" placeholder="Search by username or site…" aria-label="Search saved logins for this site" /></div>
+    <div class="kp-body">${rows}</div>
+    <div class="kp-err" id="kp-err"></div>`;
+  const q = $keyPicker.querySelector('#kp-q');
+  q.oninput = () => {
+    const needle = q.value.trim().toLowerCase();
+    $keyPicker.querySelectorAll('[data-kp-id]').forEach(r => { r.hidden = !!needle && !r.dataset.search.includes(needle); });
+  };
+  $keyPicker.querySelector('#kp-x').onclick = closeKeyPicker;
+  $keyPicker.querySelectorAll('[data-kp-use]').forEach(b => {
+    b.onclick = async () => {
+      const id = b.getAttribute('data-kp-use');
+      const key = keyPicker && keyPicker.key;
+      closeKeyPicker(); // the banner + the page answer are the feedback for a Use
+      if (key) await runLoginAction(key, id);
+    };
+  });
+  $keyPicker.querySelectorAll('[data-kp-copy]').forEach(b => {
+    b.onclick = async () => {
+      const err = $keyPicker.querySelector('#kp-err');
+      const key = keyPicker && keyPicker.key;
+      if (!key) return;
+      const r = await window.api.credsCopy(key, b.getAttribute('data-kp-copy'), b.getAttribute('data-kp-field'))
+        .catch(e => ({ ok: false, message: errText(e) }));
+      if (!r || !r.ok) { if (err) err.textContent = (r && r.message) || 'Could not copy that.'; return; }
+      if (err) err.textContent = '';
+      const was = b.textContent;
+      b.textContent = 'Copied ✓';
+      b.classList.add('copied');
+      setTimeout(() => { b.textContent = was; b.classList.remove('copied'); }, 1400);
+    };
+  });
+}
+function closeKeyPicker() {
+  keyPicker = null;
+  $keyPicker.hidden = true;
+  $keyPickerBack.hidden = true;
+  $keyPicker.innerHTML = '';
+  renderKeyChip();
+}
+$keysite.onclick = () => { if (keyPicker) closeKeyPicker(); else openKeyPicker(); };
+$keyPickerBack.addEventListener('click', closeKeyPicker);
 document.getElementById('nav-back').innerHTML = icon('arrowLeft');
 document.getElementById('nav-fwd').innerHTML = icon('arrowRight');
 document.getElementById('nav-dash').innerHTML = icon('dashboard');
@@ -1027,6 +1130,7 @@ $modalBack.addEventListener('click', e => { if (e.target === $modalBack) closeMo
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
+    if (keyPicker) { closeKeyPicker(); return; } // Esc closes the picker first, Home stays put
     if (!$modalBack.hidden) { closeModal(); return; }
     if (state.activeKey !== null) window.api.showHome();
   }
@@ -1053,7 +1157,7 @@ async function pollMemory() {
 setInterval(pollMemory, 2000);
 pollMemory();
 
-function renderAll() { renderTabCtl(); renderTabs(); renderRail(); renderHome(); renderInfobar(); }
+function renderAll() { renderTabCtl(); renderTabs(); renderRail(); renderHome(); renderInfobar(); renderKeyChip(); }
 
 window.api.onUpdateState(s => { updateState = s; renderRail(); if (state.activeKey === null) renderHome(); });
 
@@ -1062,6 +1166,11 @@ window.api.onTabsState(s => {
   state = Object.assign(state, s);
   if (s.registry) registry = s.registry;
   if (s.services) services = s.services; // keeps user-added services in sync
+  // The picker describes one tab's live site: a navigation or a tab switch makes it stale, so it
+  // closes (Use/Copy always act through main on the ACTIVE tab anyway, never on a stale list).
+  if (keyPicker && (state.activeKey !== keyPicker.key || !state.siteLogins || state.siteLogins.host !== keyPicker.host)) {
+    closeKeyPicker();
+  }
   renderAll();
   if (prevFocus === 'filter') { const f = document.getElementById('filter'); if (f) { f.focus(); f.selectionStart = f.value.length; } }
 });
