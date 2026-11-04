@@ -133,6 +133,8 @@ function renderNav() {
 // means. Nothing here ever holds a password: Use asks main to fill, Copy asks main to put it on the
 // clipboard, and both answers are summaries.
 let keyPicker = null; // { key, host, logins } while open
+let keyPickerRequest = 0; // cancels stale fetches when the picker closes or another tab is selected
+let keyPickerModalOpen = false; // mirrors the native-view hide/show handshake
 function renderKeyChip() {
   const sl = state.siteLogins;
   const show = !!(sl && state.activeKey !== null && sl.key === state.activeKey && sl.count > 0);
@@ -160,14 +162,26 @@ function keyPickerRowHtml(l) {
 async function openKeyPicker() {
   const key = state.activeKey;
   if (key === null) return;
+  const request = ++keyPickerRequest;
+  // Mark the picker open immediately so a second click closes/cancels it instead of starting a
+  // competing fetch. The loading panel remains visible as soon as the user clicks the chip.
+  keyPicker = { key, host: '', logins: [], loading: true };
   $keyPickerBack.hidden = false;
   $keyPicker.hidden = false;
   $keyPicker.innerHTML = '<div class="kp-note">Loading saved logins…</div>';
-  renderKeyChip();
+  // Account WebContentsViews are native children and paint above the chrome DOM. Hide the active
+  // view first, just as setModalOpen does for the gear window, or this popover is invisible.
+  try { await window.api.setModalOpen(true); keyPickerModalOpen = true; }
+  catch (err) {
+    closeKeyPicker();
+    showNotice(key, { kind: 'failed', reason: `Could not open the saved-login picker: ${errText(err)}` });
+    return;
+  }
+  if (request !== keyPickerRequest || state.activeKey !== key) { await closeKeyPicker(); return; }
   let data = { host: '', logins: [] };
   try { data = await window.api.credsSiteList(key); } catch (err) { data = { host: '', logins: [], error: errText(err) }; }
-  if (state.activeKey !== key) { closeKeyPicker(); return; } // the user moved on while it loaded
-  keyPicker = { key, host: data.host, logins: data.logins || [] };
+  if (request !== keyPickerRequest || state.activeKey !== key) { await closeKeyPicker(); return; }
+  keyPicker = { key, host: data.host, logins: data.logins || [], loading: false };
   drawKeyPicker();
   const q = $keyPicker.querySelector('#kp-q');
   if (q) q.focus();
@@ -216,12 +230,17 @@ function drawKeyPicker() {
     };
   });
 }
-function closeKeyPicker() {
+async function closeKeyPicker() {
+  ++keyPickerRequest;
   keyPicker = null;
   $keyPicker.hidden = true;
   $keyPickerBack.hidden = true;
   $keyPicker.innerHTML = '';
   renderKeyChip();
+  if (keyPickerModalOpen) {
+    keyPickerModalOpen = false;
+    await window.api.setModalOpen(false).catch(() => {});
+  }
 }
 $keysite.onclick = () => { if (keyPicker) closeKeyPicker(); else openKeyPicker(); };
 $keyPickerBack.addEventListener('click', closeKeyPicker);
@@ -337,9 +356,7 @@ function acctRow(a) {
     ? `<button class="act" data-fill="${esc(a.key)}" title="Fill this account's saved login into the page" aria-label="Fill login">${icon('key')}</button>` : '';
   // "Has saved login" indicator: visible while the row is not hovered, so a sleeping account still
   // tells you a password exists for it (0.8.0 showed nothing until a live tab was open).
-  // 0.12.1: it is a BUTTON, not a dead indicator — pressing it opens this account's logins window
-  // (the gear modal's "Saved logins for this account" section, with Use on every row). The rail's
-  // click handler already routes [data-gear] to openEditModal before the row-open path.
+  // 0.12.1: pressing this button opens this account's Manage window with its saved-login list.
   const keyBadge = a.loginCount
     ? `<button class="badge savedkey" data-gear="${esc(a.key)}" title="${a.loginCount} saved login${a.loginCount === 1 ? '' : 's'} for this account — click to see and use them" aria-label="Show saved logins">${icon('key')}</button>` : '';
   return `<div class="acct ${isActive ? 'active' : ''} ${tab ? 'open' : ''}" data-row="${esc(a.key)}" title="${esc(a.label)}">
@@ -1285,7 +1302,7 @@ window.api.onTabsState(s => {
   if (s.services) services = s.services; // keeps user-added services in sync
   // The picker describes one tab's live site: a navigation or a tab switch makes it stale, so it
   // closes (Use/Copy always act through main on the ACTIVE tab anyway, never on a stale list).
-  if (keyPicker && (state.activeKey !== keyPicker.key || !state.siteLogins || state.siteLogins.host !== keyPicker.host)) {
+  if (keyPicker && !keyPicker.loading && (state.activeKey !== keyPicker.key || !state.siteLogins || state.siteLogins.host !== keyPicker.host)) {
     closeKeyPicker();
   }
   renderAll();

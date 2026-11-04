@@ -2427,17 +2427,54 @@ function runInteractive(captureMode = false) {
           if (win.webContents && !win.webContents.isDestroyed()) {
             await win.webContents.executeJavaScript('document.getElementById("keysite").click()').catch(err => console.error('[capture] picker click failed:', err.message));
           }
-          const info = await win.webContents.executeJavaScript(`JSON.stringify({
-            chip: document.getElementById('keysite').hidden ? 'hidden' : document.getElementById('keysite').innerText.trim(),
-            open: !document.getElementById('keypicker').hidden,
-            rows: document.querySelectorAll('#keypicker [data-kp-id]').length,
-            search: !!document.getElementById('kp-q'),
-            rowsMeta: [...document.querySelectorAll('#keypicker .kp-meta')].map(m => m.innerText.trim()).slice(0, 4),
-          })`).catch(err => 'probe failed: ' + err.message);
+          const info = await win.webContents.executeJavaScript(`(async () => {
+            const deadline = Date.now() + 5000;
+            while (Date.now() < deadline) {
+              const picker = document.getElementById('keypicker');
+              const rows = picker ? picker.querySelectorAll('[data-kp-id]').length : 0;
+              const search = picker && picker.querySelector('#kp-q');
+              if (rows || (picker && picker.innerText.includes('No saved login matches'))) break;
+              await new Promise(r => setTimeout(r, 50));
+            }
+            const picker = document.getElementById('keypicker');
+            return JSON.stringify({
+              chip: document.getElementById('keysite').hidden ? 'hidden' : document.getElementById('keysite').innerText.trim(),
+              open: !picker.hidden,
+              rows: picker.querySelectorAll('[data-kp-id]').length,
+              search: !!picker.querySelector('#kp-q'),
+              pickerText: picker.innerText.trim().slice(0, 500),
+              rowsMeta: [...picker.querySelectorAll('.kp-meta')].map(m => m.innerText.trim()).slice(0, 4),
+            });
+          })()`).catch(err => 'probe failed: ' + err.message);
           console.log('[capture] demo picker:', info);
+          let pickerProof = null;
+          try { pickerProof = JSON.parse(info); } catch {}
+          const pickerOk = !!(pickerProof && pickerProof.chip !== 'hidden' && pickerProof.open && pickerProof.rows > 0 && pickerProof.search);
+          console.log(`[capture] ${pickerOk ? 'PASS' : 'FAIL'} top-chip-opens-populated-picker chip=${pickerProof && pickerProof.chip} open=${pickerProof && pickerProof.open} rows=${pickerProof && pickerProof.rows} search=${pickerProof && pickerProof.search}`);
+          if (!pickerOk) { app.exit(1); return; }
           // --demo-picker-copied: type in the search box and press Copy password through the real
           // renderer → preload → main chain, then read the clipboard back from MAIN (the secret must
           // never appear in the renderer). Photographs the searched + "Copied ✓" state.
+          if (process.argv.includes('--demo-picker-cycle') && win.webContents && !win.webContents.isDestroyed()) {
+            const closed = await win.webContents.executeJavaScript(`(async () => {
+              const x = document.querySelector('#keypicker #kp-x');
+              if (x) x.click();
+              await new Promise(r => setTimeout(r, 700));
+              return JSON.stringify({ open: !document.getElementById('keypicker').hidden, modal: !document.getElementById('modal-back').hidden });
+            })()`).catch(err => 'close probe failed: ' + err.message);
+            const viewVisible = vm.tabs.get(openKey)?.visible === true;
+            console.log('[capture] demo picker closed:', closed, 'account view visible:', viewVisible);
+            await win.webContents.executeJavaScript('document.getElementById("keysite").click()').catch(() => {});
+            await new Promise(r => setTimeout(r, 900));
+            const reopened = await win.webContents.executeJavaScript(`JSON.stringify({ open: !document.getElementById('keypicker').hidden, rows: document.querySelectorAll('#keypicker [data-kp-id]').length })`).catch(err => 'reopen probe failed: ' + err.message);
+            console.log('[capture] demo picker reopened:', reopened);
+            let closedProof = null; let reopenedProof = null;
+            try { closedProof = JSON.parse(closed); } catch {}
+            try { reopenedProof = JSON.parse(reopened); } catch {}
+            const cycleOk = !!(closedProof && !closedProof.open && closedProof.modal === false && viewVisible && reopenedProof && reopenedProof.open && reopenedProof.rows > 0);
+            console.log(`[capture] ${cycleOk ? 'PASS' : 'FAIL'} top-chip-close-restores-and-reopens closed=${closed} viewVisible=${viewVisible} reopened=${reopened}`);
+            if (!cycleOk) { app.exit(1); return; }
+          }
           if (process.argv.includes('--demo-picker-copied') && win.webContents && !win.webContents.isDestroyed()) {
             const wired = await win.webContents.executeJavaScript(`(async () => {
               const q = document.getElementById('kp-q');

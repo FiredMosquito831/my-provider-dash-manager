@@ -2,6 +2,15 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.13.2 — 2026-11-04
+
+### Fixed
+- **The top address-bar saved-login chip now opens its popover above the active website.** Account
+  views are native child views that paint above the app's HTML, so the picker could be present in the
+  DOM and still be invisible. It now hides the active page while the popover is open, restores the
+  page on close, and supports closing and reopening. Verified with the actual chip: 3 rows open, page
+  restores, 3 rows reopen.
+
 ## 0.13.1 — 2026-11-03
 
 ### Fixed
