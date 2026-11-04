@@ -2,6 +2,14 @@
 
 All notable changes. Format loosely follows Keep a Changelog.
 
+## 0.13.3 — 2026-11-04
+
+### Fixed
+- **The address-bar key chip now opens a visible saved-login picker over account pages.** Electron's
+  native account view painted above the chrome HTML, leaving the picker invisible. The picker now
+  hides that view while open, restores it on close, and safely handles loading/tab changes. Verified:
+  chip click opens three rows; close restores the page; clicking the chip again reopens the rows.
+
 ## 0.13.2 — 2026-11-04
 
 ### Fixed
